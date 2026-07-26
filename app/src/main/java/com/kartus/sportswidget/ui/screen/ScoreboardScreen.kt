@@ -39,11 +39,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import coil.compose.AsyncImage
 import com.kartus.sportswidget.domain.Game
 import com.kartus.sportswidget.domain.GameState
+import com.kartus.sportswidget.domain.Team
 import com.kartus.sportswidget.ui.ScoreboardViewModel
+import com.kartus.sportswidget.util.TeamLogos
 import com.kartus.sportswidget.util.TimeFormat
 import java.time.LocalDate
 
@@ -167,10 +171,9 @@ private fun GameCard(game: Game, onClick: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 TeamLine(
-                    name = game.away.shortName,
-                    record = game.away.record,
+                    team = game.away,
                     score = game.awayScore,
                     // Bold the leader so a glance reads the result without parsing numbers.
                     leading = game.awayScore != null && game.homeScore != null &&
@@ -178,8 +181,7 @@ private fun GameCard(game: Game, onClick: () -> Unit) {
                     showScore = game.state != GameState.PREVIEW,
                 )
                 TeamLine(
-                    name = game.home.shortName,
-                    record = game.home.record,
+                    team = game.home,
                     score = game.homeScore,
                     leading = game.awayScore != null && game.homeScore != null &&
                         game.homeScore > game.awayScore,
@@ -189,16 +191,32 @@ private fun GameCard(game: Game, onClick: () -> Unit) {
 
             Spacer(Modifier.width(12.dp))
 
-            Column(horizontalAlignment = Alignment.End) {
+            // Fixed width keeps the status column aligned down the list whether it
+            // reads "Final", "Final/11" or "7:05 PM".
+            Column(
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.width(72.dp),
+            ) {
                 if (game.state.isLive) {
-                    LiveDot()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LiveDot()
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "LIVE",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     Spacer(Modifier.height(2.dp))
                 }
                 Text(
                     text = game.compactStatus { TimeFormat.clock(it) },
                     style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.End,
                     color = if (game.state.isLive) {
-                        MaterialTheme.colorScheme.error
+                        MaterialTheme.colorScheme.onSurface
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
@@ -219,35 +237,54 @@ private fun GameCard(game: Game, onClick: () -> Unit) {
 
 @Composable
 private fun TeamLine(
-    name: String,
-    record: String?,
+    team: Team,
     score: Int?,
     leading: Boolean,
     showScore: Boolean,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        TeamLogo(teamId = team.id, size = 26.dp)
+        Spacer(Modifier.width(10.dp))
         Text(
-            text = name,
+            text = team.shortName,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
             modifier = Modifier.weight(1f),
         )
-        if (record != null) {
+        team.record?.let {
             Text(
-                text = record,
+                text = it,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
         }
         if (showScore) {
             Text(
                 text = score?.toString() ?: "-",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
+                textAlign = TextAlign.End,
+                // Fixed width so single- and double-digit scores line up in a column.
+                modifier = Modifier.width(26.dp),
             )
         }
     }
+}
+
+/**
+ * Team mark, fetched and disk-cached by Coil. Deliberately renders nothing while
+ * loading or on failure — a missing logo should leave the row's text intact rather
+ * than shifting it or showing a placeholder box.
+ */
+@Composable
+fun TeamLogo(teamId: Int, size: Dp) {
+    AsyncImage(
+        model = TeamLogos.url(teamId, TeamLogos.APP_SIZE),
+        contentDescription = null,
+        modifier = Modifier.size(size),
+    )
 }
 
 @Composable

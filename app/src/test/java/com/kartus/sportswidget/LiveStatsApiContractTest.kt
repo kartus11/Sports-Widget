@@ -3,6 +3,7 @@ package com.kartus.sportswidget
 import com.kartus.sportswidget.data.ScheduleResponse
 import com.kartus.sportswidget.data.StandingsResponse
 import com.kartus.sportswidget.data.StatsApiMapper
+import com.kartus.sportswidget.util.TeamLogos
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -124,6 +125,38 @@ class LiveStatsApiContractTest {
         assertFalse("Final game has no innings", linescore.innings.isEmpty())
         assertNotNull("Linescore missing R for away", linescore.awayRuns)
         assertNotNull("Linescore missing H for away", linescore.awayHits)
+    }
+
+    @Test
+    fun `team logo endpoint serves a real image at both sizes`() {
+        // TeamLogos builds these URLs from the team id alone. If the path shape ever
+        // changes, both the app rows and the widget silently lose their logos — this
+        // is the only thing that would notice.
+        listOf(TeamLogos.APP_SIZE, TeamLogos.WIDGET_SIZE).forEach { size ->
+            val url = TeamLogos.url(teamId = 147, size = size) // Yankees
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "SportsWidget/0.1 (contract test)")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                assertTrue("HTTP ${response.code} from $url", response.isSuccessful)
+                val bytes = requireNotNull(response.body).bytes()
+                assertTrue("Logo at size $size is only ${bytes.size} bytes", bytes.size > 500)
+
+                val isPng = bytes.size > 8 &&
+                    bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() &&
+                    bytes[2] == 'N'.code.toByte() && bytes[3] == 'G'.code.toByte()
+                val isSvg = String(bytes.copyOfRange(0, minOf(256, bytes.size)))
+                    .contains("<svg", ignoreCase = true)
+                assertTrue(
+                    "Logo at size $size is neither PNG nor SVG — the widget can only " +
+                        "decode a bitmap, so a format change breaks it",
+                    isPng || isSvg,
+                )
+                assertTrue("Widget needs a decodable bitmap, got SVG at size $size", isPng)
+            }
+        }
     }
 
     @Test

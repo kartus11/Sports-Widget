@@ -4,6 +4,7 @@ import com.kartus.sportswidget.data.ScheduleResponse
 import com.kartus.sportswidget.data.StandingsResponse
 import com.kartus.sportswidget.data.StatsApiMapper
 import com.kartus.sportswidget.domain.GameState
+import com.kartus.sportswidget.domain.ScoreboardOrder
 import com.kartus.sportswidget.util.TimeFormat
 import kotlinx.serialization.json.Json
 import java.time.ZoneId
@@ -248,6 +249,26 @@ class StatsApiMapperTest {
             json.decodeFromString(ScheduleResponse.serializer(), broken),
         )
         assertTrue(parsed.isEmpty())
+    }
+
+    @Test
+    fun `scoreboard order puts live games first, not the earliest start`() {
+        // By first pitch alone the order would be 745803, 745804, 745801, 745802.
+        // The live game has to lead regardless of when it started.
+        val ordered = games.sortedWith(ScoreboardOrder).map { it.gamePk }
+        assertEquals(listOf(745801L, 745802L, 745803L, 745804L), ordered)
+    }
+
+    @Test
+    fun `within a state, games stay in first-pitch order`() {
+        val finals = games.filter { it.state == GameState.FINAL } +
+            games.single { it.gamePk == 745801L }.copy(
+                gamePk = 999L,
+                state = GameState.FINAL,
+                startTimeUtcMillis = 0L,
+            )
+        val ordered = finals.sortedWith(ScoreboardOrder).map { it.gamePk }
+        assertEquals(listOf(999L, 745803L), ordered)
     }
 
     @Test

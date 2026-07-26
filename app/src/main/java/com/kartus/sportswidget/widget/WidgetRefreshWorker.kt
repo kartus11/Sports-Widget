@@ -37,6 +37,9 @@ class WidgetRefreshWorker(
 
         return repository.scoreboard(LocalDate.now(), force = true).fold(
             onSuccess = { scoreboard ->
+                // Fetch logos before publishing so the redraw that follows already
+                // has bitmaps on disk to decode.
+                WidgetLogoCache.prefetch(applicationContext, scoreboard)
                 WidgetState.publish(applicationContext, scoreboard)
                 Result.success()
             },

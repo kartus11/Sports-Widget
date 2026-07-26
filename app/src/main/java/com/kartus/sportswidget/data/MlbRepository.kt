@@ -3,6 +3,7 @@ package com.kartus.sportswidget.data
 import com.kartus.sportswidget.domain.DivisionStandings
 import com.kartus.sportswidget.domain.Linescore
 import com.kartus.sportswidget.domain.Scoreboard
+import com.kartus.sportswidget.domain.ScoreboardOrder
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
@@ -40,12 +41,7 @@ class MlbRepository(private val api: StatsApiClient) {
             val games = StatsApiMapper.toGames(api.schedule(key))
             val board = Scoreboard(
                 date = key,
-                games = games.sortedWith(
-                    compareBy(
-                        { it.startTimeUtcMillis ?: Long.MAX_VALUE },
-                        { it.gamePk },
-                    ),
-                ),
+                games = games.sortedWith(ScoreboardOrder),
                 fetchedAtMillis = System.currentTimeMillis(),
             )
             mutex.withLock { scoreboards[key] = board }

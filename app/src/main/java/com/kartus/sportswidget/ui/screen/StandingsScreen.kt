@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -96,6 +97,8 @@ private fun DivisionCard(division: DivisionStandings) {
 @Composable
 private fun HeaderRow() {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        // Keeps the header cells over their columns now that rows start with a logo.
+        Spacer(Modifier.width(28.dp))
         Text("", modifier = Modifier.weight(1f))
         StatCell("W", header = true)
         StatCell("L", header = true)
@@ -111,9 +114,12 @@ private fun TeamRow(row: StandingsRow) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        TeamLogo(teamId = row.team.id, size = 20.dp)
+        Spacer(Modifier.width(8.dp))
         Text(
             text = row.team.shortName,
             style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
             modifier = Modifier.weight(1f),
         )
         StatCell(row.wins.toString())

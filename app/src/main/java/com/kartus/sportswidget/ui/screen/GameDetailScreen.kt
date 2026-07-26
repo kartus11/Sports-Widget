@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.kartus.sportswidget.domain.Game
 import com.kartus.sportswidget.domain.GameState
 import com.kartus.sportswidget.domain.Linescore
+import com.kartus.sportswidget.domain.Team
 import com.kartus.sportswidget.util.TimeFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,9 +98,9 @@ private fun ScoreHeader(game: Game) {
             )
             Spacer(Modifier.height(12.dp))
 
-            SideRow(game.away.name, game.away.record, game.awayScore, game.state)
-            Spacer(Modifier.height(8.dp))
-            SideRow(game.home.name, game.home.record, game.homeScore, game.state)
+            SideRow(game.away, game.awayScore, game.state)
+            Spacer(Modifier.height(12.dp))
+            SideRow(game.home, game.homeScore, game.state)
 
             if (game.state.isLive) {
                 val ls = game.linescore
@@ -117,11 +118,13 @@ private fun ScoreHeader(game: Game) {
 }
 
 @Composable
-private fun SideRow(name: String, record: String?, score: Int?, state: GameState) {
+private fun SideRow(team: Team, score: Int?, state: GameState) {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        TeamLogo(teamId = team.id, size = 40.dp)
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.titleMedium)
-            record?.let {
+            Text(team.name, style = MaterialTheme.typography.titleMedium)
+            team.record?.let {
                 Text(
                     it,
                     style = MaterialTheme.typography.labelSmall,

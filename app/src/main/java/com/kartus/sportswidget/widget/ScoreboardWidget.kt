@@ -1,11 +1,15 @@
 package com.kartus.sportswidget.widget
 
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
-import androidx.datastore.preferences.core.Preferences
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -14,8 +18,8 @@ import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.background
-import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
@@ -24,54 +28,60 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.kartus.sportswidget.domain.Game
 import com.kartus.sportswidget.domain.GameState
 import com.kartus.sportswidget.domain.Scoreboard
+import com.kartus.sportswidget.domain.Team
 import com.kartus.sportswidget.ui.MainActivity
 import com.kartus.sportswidget.util.TimeFormat
 
 /**
  * Home-screen scoreboard.
  *
- * Renders purely from persisted state — see [WidgetState] for why. Tapping a row
- * opens the app (where live polling is fast); tapping the header forces a refresh.
+ * Everything it needs is resolved before composition: the scoreboard snapshot is
+ * read out of widget state and the logos are decoded from disk, so the composable
+ * itself is pure and synchronous. See [WidgetState] and [WidgetLogoCache] for why
+ * a widget cannot fetch either at draw time.
  */
 class ScoreboardWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val prefs = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+        val scoreboard = WidgetState.decode(prefs[WidgetState.SCOREBOARD_KEY])
+        val logos = scoreboard?.let { WidgetLogoCache.load(context, it) }.orEmpty()
+
         provideContent {
             GlanceTheme {
-                WidgetBody(currentState<Preferences>())
+                WidgetBody(scoreboard, logos)
             }
         }
     }
 
     @Composable
-    private fun WidgetBody(prefs: Preferences) {
-        val scoreboard = WidgetState.decode(prefs[WidgetState.SCOREBOARD_KEY])
-
+    private fun WidgetBody(scoreboard: Scoreboard?, logos: Map<Int, Bitmap>) {
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(GlanceTheme.colors.widgetBackground)
                 .cornerRadius(16.dp)
-                .padding(12.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         ) {
             Header(scoreboard)
-            Spacer(GlanceModifier.height(6.dp))
+            Spacer(GlanceModifier.height(4.dp))
 
             when {
                 scoreboard == null -> Placeholder("Tap ⟳ to load today's games")
                 scoreboard.games.isEmpty() -> Placeholder("No games scheduled")
                 else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
                     items(scoreboard.games, itemId = { it.gamePk }) { game ->
-                        GameRow(game)
+                        GameRow(game, logos)
                     }
                 }
             }
@@ -91,74 +101,125 @@ class ScoreboardWidget : GlanceAppWidget() {
                     fontWeight = FontWeight.Bold,
                     color = GlanceTheme.colors.onSurface,
                 ),
-                modifier = GlanceModifier.defaultWeight(),
             )
 
             // Freshness matters more on a widget than in the app: the user has no
             // other signal that a 15-minute-old number is 15 minutes old.
-            scoreboard?.let {
-                Text(
-                    text = TimeFormat.relativeAge(it.fetchedAtMillis),
-                    style = TextStyle(fontSize = 10.sp, color = GlanceTheme.colors.onSurfaceVariant),
-                )
+            if (scoreboard != null) {
                 Spacer(GlanceModifier.width(8.dp))
+                Text(
+                    text = TimeFormat.relativeAge(scoreboard.fetchedAtMillis),
+                    style = TextStyle(fontSize = 10.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    modifier = GlanceModifier.defaultWeight(),
+                )
+            } else {
+                Spacer(GlanceModifier.defaultWeight())
             }
 
             Text(
                 text = "⟳",
-                style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.primary),
+                style = TextStyle(fontSize = 15.sp, color = GlanceTheme.colors.primary),
                 modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>()),
             )
         }
     }
 
     @Composable
-    private fun GameRow(game: Game) {
+    private fun GameRow(game: Game, logos: Map<Int, Bitmap>) {
         Row(
             modifier = GlanceModifier
                 .fillMaxWidth()
-                .padding(vertical = 3.dp)
+                .padding(vertical = 4.dp)
                 .clickable(actionStartActivity<MainActivity>()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Teams and scores share one weighted column so the scores land in a
+            // single right-aligned stack instead of floating mid-row.
             Column(modifier = GlanceModifier.defaultWeight()) {
-                TeamLine(game.away.abbreviation, game.awayScore, game.state, leading(game, home = false))
-                TeamLine(game.home.abbreviation, game.homeScore, game.state, leading(game, home = true))
+                TeamLine(game.away, game.awayScore, game.state, leading(game, home = false), logos)
+                Spacer(GlanceModifier.height(3.dp))
+                TeamLine(game.home, game.homeScore, game.state, leading(game, home = true), logos)
             }
 
-            Text(
-                text = game.compactStatus { TimeFormat.clock(it) },
-                style = TextStyle(
-                    fontSize = 11.sp,
-                    color = if (game.state.isLive) {
-                        GlanceTheme.colors.error
-                    } else {
-                        GlanceTheme.colors.onSurfaceVariant
-                    },
-                    fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
-                ),
-            )
+            Spacer(GlanceModifier.width(8.dp))
+            StatusBlock(game)
         }
     }
 
     @Composable
-    private fun TeamLine(abbreviation: String, score: Int?, state: GameState, leading: Boolean) {
+    private fun TeamLine(
+        team: Team,
+        score: Int?,
+        state: GameState,
+        leading: Boolean,
+        logos: Map<Int, Bitmap>,
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val logo = logos[team.id]
+            if (logo != null) {
+                Image(
+                    provider = ImageProvider(logo),
+                    contentDescription = null,
+                    modifier = GlanceModifier.size(16.dp),
+                )
+            } else {
+                // Hold the column so rows stay aligned when a logo is missing.
+                Spacer(GlanceModifier.width(16.dp))
+            }
+
+            Spacer(GlanceModifier.width(6.dp))
+
             Text(
-                text = abbreviation,
+                text = team.abbreviation,
                 style = TextStyle(
                     fontSize = 13.sp,
                     color = GlanceTheme.colors.onSurface,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
                 ),
-                modifier = GlanceModifier.width(44.dp),
+                modifier = GlanceModifier.defaultWeight(),
             )
+
             Text(
                 text = if (state == GameState.PREVIEW) "" else score?.toString() ?: "-",
                 style = TextStyle(
                     fontSize = 13.sp,
                     color = GlanceTheme.colors.onSurface,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.End,
+                ),
+                modifier = GlanceModifier.width(22.dp),
+            )
+        }
+    }
+
+    @Composable
+    private fun StatusBlock(game: Game) {
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = GlanceModifier.width(58.dp),
+        ) {
+            if (game.state.isLive) {
+                Text(
+                    text = "LIVE",
+                    style = TextStyle(
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GlanceTheme.colors.error,
+                        textAlign = TextAlign.End,
+                    ),
+                )
+            }
+            Text(
+                text = game.compactStatus { TimeFormat.clock(it) },
+                style = TextStyle(
+                    fontSize = 11.sp,
+                    color = if (game.state.isLive) {
+                        GlanceTheme.colors.onSurface
+                    } else {
+                        GlanceTheme.colors.onSurfaceVariant
+                    },
+                    fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.End,
                 ),
             )
         }

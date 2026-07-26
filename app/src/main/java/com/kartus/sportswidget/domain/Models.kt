@@ -24,6 +24,19 @@ enum class GameState {
     OFF;
 
     val isLive: Boolean get() = this == LIVE
+
+    /**
+     * Where games in this state belong on a scoreboard. Games in progress are the
+     * only ones whose numbers are still changing, so they lead; then what is about
+     * to start, then results, then games that will not happen.
+     */
+    val sortPriority: Int
+        get() = when (this) {
+            LIVE -> 0
+            PREVIEW -> 1
+            FINAL -> 2
+            OFF -> 3
+        }
 }
 
 @Serializable
@@ -104,6 +117,17 @@ data class Game(
         GameState.OFF -> detailedState
     }
 }
+
+/**
+ * Scoreboard ordering: in-progress games first, then by first pitch. Lives here
+ * rather than in the repository so the app, the widget and the tests all agree on
+ * what "first" means.
+ */
+val ScoreboardOrder: Comparator<Game> = compareBy(
+    { it.state.sortPriority },
+    { it.startTimeUtcMillis ?: Long.MAX_VALUE },
+    { it.gamePk },
+)
 
 @Serializable
 data class StandingsRow(
