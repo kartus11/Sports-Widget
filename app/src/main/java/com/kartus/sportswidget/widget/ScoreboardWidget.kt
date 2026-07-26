@@ -6,10 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
@@ -28,8 +28,6 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kartus.sportswidget.domain.Game
@@ -132,7 +130,11 @@ class ScoreboardWidget : GlanceAppWidget() {
                 text = game.compactStatus { TimeFormat.clock(it) },
                 style = TextStyle(
                     fontSize = 11.sp,
-                    color = if (game.state.isLive) LIVE_COLOR else GlanceTheme.colors.onSurfaceVariant,
+                    color = if (game.state.isLive) {
+                        GlanceTheme.colors.error
+                    } else {
+                        GlanceTheme.colors.onSurfaceVariant
+                    },
                     fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
                 ),
             )
@@ -175,10 +177,5 @@ class ScoreboardWidget : GlanceAppWidget() {
         val away = game.awayScore ?: return false
         val homeScore = game.homeScore ?: return false
         return if (home) homeScore > away else away > homeScore
-    }
-
-    private companion object {
-        /** Glance has no error role in its colour set; this matches the app's live accent. */
-        val LIVE_COLOR = ColorProvider(day = Color(0xFFD7263D), night = Color(0xFFFF8A9A))
     }
 }
