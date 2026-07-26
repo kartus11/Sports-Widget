@@ -1,0 +1,159 @@
+package com.kartus.sportswidget
+
+import com.kartus.sportswidget.data.ScheduleResponse
+import com.kartus.sportswidget.data.StandingsResponse
+import com.kartus.sportswidget.data.StatsApiMapper
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.BeforeClass
+import org.junit.Test
+import java.time.LocalDate
+import java.util.concurrent.TimeUnit
+
+/**
+ * Contract test against the real statsapi.mlb.com.
+ *
+ * StatsAPI is undocumented, so the field names in `StatsApiDto` are an assumption
+ * until something checks them against the live server. Everything else in this
+ * suite runs offline against fixtures; this one class makes real network calls and
+ * exists to answer one question: do the names we depend on still exist upstream?
+ *
+ * Skipped unless RUN_LIVE_API_TESTS=1, so a normal `./gradlew test` stays offline,
+ * deterministic, and unaffected by MLB's uptime. CI sets it in a separate job that
+ * is allowed to fail without blocking the build.
+ */
+class LiveStatsApiContractTest {
+
+    companion object {
+        private const val BASE = "https://statsapi.mlb.com"
+
+        private val client = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .build()
+
+        private val json = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+            explicitNulls = false
+        }
+
+        @JvmStatic
+        @BeforeClass
+        fun requireOptIn() {
+            assumeTrue(
+                "Set RUN_LIVE_API_TESTS=1 to run live API contract tests",
+                System.getenv("RUN_LIVE_API_TESTS") == "1",
+            )
+        }
+
+        private fun fetch(url: String): String {
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "SportsWidget/0.1 (contract test)")
+                .build()
+            client.newCall(request).execute().use { response ->
+                assertTrue("HTTP ${response.code} from $url", response.isSuccessful)
+                return requireNotNull(response.body).string()
+            }
+        }
+    }
+
+    /**
+     * A one-week window so the test does not depend on there being games today —
+     * during the season that guarantees a mix of finals and, usually, something
+     * scheduled.
+     */
+    private fun recentSchedule(): List<com.kartus.sportswidget.domain.Game> {
+        val end = LocalDate.now()
+        val start = end.minusDays(6)
+        val body = fetch(
+            "$BASE/api/v1/schedule?sportId=1&startDate=$start&endDate=$end" +
+                "&hydrate=team,linescore,probablePitcher,venue",
+        )
+        return StatsApiMapper.toGames(json.decodeFromString(ScheduleResponse.serializer(), body))
+    }
+
+    @Test
+    fun `schedule endpoint parses into games`() {
+        val games = recentSchedule()
+        assertFalse(
+            "No games parsed from a 7-day window — either the season is over or " +
+                "the schedule response shape changed",
+            games.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `team hydration supplies the names and abbreviations the UI shows`() {
+        val games = recentSchedule()
+        assumeTrue(games.isNotEmpty())
+
+        // The widget shows abbreviations; the app shows short names. If `hydrate=team`
+        // stops returning them the mapper silently falls back to derived initials,
+        // which is exactly the kind of quiet degradation worth catching here.
+        val derivedAbbreviations = games.count {
+            it.away.abbreviation.length != 2 && it.away.abbreviation.length != 3
+        }
+        assertTrue(
+            "Team abbreviations look derived rather than hydrated",
+            derivedAbbreviations == 0,
+        )
+        assertTrue(
+            "Short names identical to full names suggests teamName is missing",
+            games.any { it.away.shortName != it.away.name },
+        )
+    }
+
+    @Test
+    fun `completed games carry scores and a linescore`() {
+        val finals = recentSchedule().filter { it.state == com.kartus.sportswidget.domain.GameState.FINAL }
+        assumeTrue("No completed games in window", finals.isNotEmpty())
+
+        val game = finals.first()
+        assertNotNull("Final game has no away score", game.awayScore)
+        assertNotNull("Final game has no home score", game.homeScore)
+
+        val linescore = requireNotNull(game.linescore) { "Final game has no linescore" }
+        assertFalse("Final game has no innings", linescore.innings.isEmpty())
+        assertNotNull("Linescore missing R for away", linescore.awayRuns)
+        assertNotNull("Linescore missing H for away", linescore.awayHits)
+    }
+
+    @Test
+    fun `standings endpoint parses into ranked divisions`() {
+        val body = fetch(
+            "$BASE/api/v1/standings?leagueId=103,104&season=${LocalDate.now().year}" +
+                "&standingsTypes=regularSeason&hydrate=team,division",
+        )
+        val divisions = StatsApiMapper.toStandings(
+            json.decodeFromString(StandingsResponse.serializer(), body),
+        )
+
+        assertTrue("Expected 6 divisions, got ${divisions.size}", divisions.size == 6)
+
+        val row = divisions.first().rows.first()
+        assertTrue("Division has no teams", divisions.all { it.rows.isNotEmpty() })
+        assertTrue("Win total looks unset", row.wins > 0 || row.losses > 0)
+        assertTrue("winningPercentage missing", row.winningPercentage != "-")
+        assertNotNull("streakCode missing", row.streak)
+    }
+
+    @Test
+    fun `game linescore endpoint parses on its own`() {
+        val finals = recentSchedule().filter { it.state == com.kartus.sportswidget.domain.GameState.FINAL }
+        assumeTrue("No completed games in window", finals.isNotEmpty())
+
+        val body = fetch("$BASE/api/v1/game/${finals.first().gamePk}/linescore")
+        val linescore = StatsApiMapper.toLinescore(
+            json.decodeFromString(com.kartus.sportswidget.data.LinescoreDto.serializer(), body),
+        )
+        assertFalse("Standalone linescore has no innings", linescore.innings.isEmpty())
+    }
+}
