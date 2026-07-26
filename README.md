@@ -87,17 +87,24 @@ app/src/main/java/com/kartus/sportswidget/
 
 ## Status
 
-The data layer is covered by unit tests (`./gradlew test`) over a fixture payload
-spanning live, scheduled, extra-inning-final and postponed games, plus the
-degraded cases: unknown fields, missing linescores, absent team blocks.
+CI (`.github/workflows/build.yml`) builds a debug APK on every push and uploads
+it as a downloadable artifact, so no local Android toolchain is needed to get an
+installable build. Two things are verified there on every run:
 
-The UI and widget have **not** been run on a device yet — they were written in an
-environment without the Android SDK. Expect to fix a compile error or two on
-first build, most likely an import in the Compose or Glance layers.
+- **Unit tests** over a fixture payload spanning live, scheduled,
+  extra-inning-final and postponed games, plus the degraded cases: unknown
+  fields, missing linescores, absent team blocks.
+- **A live contract test** against the real `statsapi.mlb.com`, confirming the
+  field names in `StatsApiDto` still exist upstream — that team hydration really
+  returns abbreviations, that completed games carry a linescore with R/H/E, and
+  that standings return six divisions with records and streaks. It runs in its
+  own job and is allowed to fail without blocking the build, so an MLB outage or
+  the offseason cannot turn CI red.
 
-The DTO field names were also written without a live response to check against,
-since the environment couldn't reach `statsapi.mlb.com`. If a screen renders but
-a specific value is blank, that's the first place to look — see note 2 above.
+What is **not** yet verified: how any of it looks or behaves on a real device.
+The APK compiles and its data layer is proven against live MLB data, but nobody
+has yet placed the widget on a home screen or watched a score tick over during a
+game. Layout, sizing and refresh behaviour are unconfirmed.
 
 ## Adding another league later
 
