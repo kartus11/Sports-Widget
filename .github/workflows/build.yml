@@ -20,14 +20,24 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+      # Gradle buries Kotlin's `e:` lines under its own stack traces, so on failure
+      # re-print just the diagnostics as the last thing the step emits. Keeps the
+      # signal at the tail of the log where it is cheap to read.
+      - name: Compile and test
+        run: |
+          set -o pipefail
+          if ! ./gradlew testDebugUnitTest assembleDebug 2>&1 | tee build.log; then
+            echo "::group::Kotlin diagnostics"
+            echo "===== COMPILE ERRORS ====="
+            grep -E '^(e|w): ' build.log | head -80 || echo "(no e:/w: lines found)"
+            echo "===== FAILING TESTS ====="
+            grep -E '^[A-Za-z0-9_.]+ > .* (FAILED|SKIPPED)$' build.log | head -40 || true
+            grep -E '^\* What went wrong:' -A 6 build.log | head -30 || true
+            echo "===== END ====="
+            echo "::endgroup::"
+            exit 1
+          fi
 
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      # The point of the whole workflow: a file you can install on a phone
-      # without a development machine.
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -35,17 +45,22 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Upload test report on failure
+      - name: Upload reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report
-          path: app/build/reports/tests/
+          name: build-reports
+          path: |
+            app/build/reports/
+            build.log
           if-no-files-found: ignore
 
   api-contract:
     name: Verify StatsAPI field names
     runs-on: ubuntu-latest
+    # Runs after the build so the two jobs do not race for the same Gradle cache
+    # keys, and so a broken compile fails once rather than twice.
+    needs: build
     # Checks our assumptions against the live MLB server. Informational: MLB being
     # down, or the season being over, must not turn the build red.
     continue-on-error: true
@@ -64,12 +79,23 @@ jobs:
       - name: Run live contract tests
         env:
           RUN_LIVE_API_TESTS: '1'
-        run: ./gradlew testDebugUnitTest --tests '*LiveStatsApiContractTest' --stacktrace
+        run: |
+          set -o pipefail
+          if ! ./gradlew testDebugUnitTest --tests '*LiveStatsApiContractTest' 2>&1 | tee contract.log; then
+            echo "::group::Contract failures"
+            echo "===== FIELD MISMATCHES ====="
+            grep -E '^(e|w): |FAILED|AssertionError|java.lang|expected:|but was:' contract.log | head -60 || true
+            echo "===== END ====="
+            echo "::endgroup::"
+            exit 1
+          fi
 
       - name: Upload contract test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: api-contract-report
-          path: app/build/reports/tests/
+          path: |
+            app/build/reports/tests/
+            contract.log
           if-no-files-found: ignore
