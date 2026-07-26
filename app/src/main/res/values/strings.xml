@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sports Widget</string>
+    <string name="widget_description">Today\'s MLB schedule and live scores</string>
+</resources>
