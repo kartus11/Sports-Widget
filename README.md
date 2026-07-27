@@ -8,7 +8,10 @@ home-screen widget.
   standings. While a game is in progress and the screen is in front of you, the
   scoreboard refreshes itself every 20 seconds.
 - **On the home screen**: a Glance widget listing today's games with scores and
-  status, refreshed every 15 minutes plus a manual ⟳ button.
+  status, refreshed every 15 minutes plus a manual ⟳ button. A failed refresh says
+  so and keeps the previous scores rather than blanking.
+
+Live games sort to the top of both surfaces; everything else follows first pitch.
 
 MLB first because it's in season. The data layer is structured so other leagues
 can be added behind the same domain models.
@@ -49,15 +52,24 @@ Endpoints used:
 | Day's games | `/api/v1/schedule?sportId=1&date=YYYY-MM-DD&hydrate=team,linescore,probablePitcher,venue` |
 | Standings | `/api/v1/standings?leagueId=103,104&season=YYYY&standingsTypes=regularSeason&hydrate=team,division` |
 | Game linescore | `/api/v1/game/{gamePk}/linescore` |
-| Team logo | `midfield.mlbstatic.com/v1/team/{teamId}/spots/{size}` |
+| Team logo | `midfield.mlbstatic.com/v1/team/{teamId}/spots/{size}` (bootstrap only) |
 
-Logos are keyed by the same team id the schedule returns, so there is no
-name-to-asset table to maintain and a rebrand needs no release. Coil loads and
-caches them in the app. The widget cannot use Coil — a widget renders to
-`RemoteViews` and needs a real `Bitmap` at composition time — so the refresh
-worker writes PNGs to `filesDir` and `provideGlance` decodes them before
-providing content. A logo that fails to load renders as empty space, never a
-placeholder.
+Logos **ship in the APK** as `app/src/main/assets/team-logos/{teamId}.png` — thirty
+files, about 124 KB total, keyed by the same team id the schedule returns. They are
+not downloaded at runtime. An earlier version fetched them on first use and that is
+what made the widget look broken: the refresh worker pulled all thirty serially
+*before* publishing the scoreboard, so tapping ⟳ did nothing visible for minutes.
+
+The `Bootstrap team logo assets` step in CI populates them: it asks StatsAPI for the
+current club list, downloads anything missing, and commits the result. Once the
+files exist the step is a no-op, so the fetch happens exactly once and never on a
+user's device. Adding an expansion team means re-running CI, not editing a table.
+
+The network URL survives for two callers only: that bootstrap step, and a runtime
+fallback for a team id with no bundled asset (an All-Star roster, say). The app
+loads assets through Coil; the widget decodes them directly, because a widget
+renders to `RemoteViews` and needs a real `Bitmap` at composition time. A logo that
+cannot be found renders as empty space, never a placeholder box.
 
 Because it's someone else's server, requests are cached on disk by OkHttp and the
 repository puts a floor under refresh frequency: 15s while a game is live, 5
@@ -88,7 +100,8 @@ app/src/main/java/com/kartus/sportswidget/
 │   ├── StatsApiClient.kt     OkHttp + kotlinx.serialization
 │   ├── MlbRepository.kt      caching and refresh floors
 │   └── ServiceLocator.kt     the whole dependency graph
-├── domain/Models.kt          Game, Team, Linescore, Scoreboard, StandingsRow
+├── domain/Models.kt          Game, Team, Linescore, Scoreboard, StandingsRow,
+│                             Boxscore, and the shared ScoreboardOrder
 ├── ui/                       Compose screens + ScoreboardViewModel
 ├── widget/                   Glance widget, WorkManager refresh, state persistence
 └── util/TimeFormat.kt        UTC → local, everywhere
