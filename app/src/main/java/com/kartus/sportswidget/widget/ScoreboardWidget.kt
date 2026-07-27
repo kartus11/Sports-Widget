@@ -38,6 +38,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.kartus.sportswidget.domain.Game
 import com.kartus.sportswidget.domain.GameState
 import com.kartus.sportswidget.domain.Scoreboard
@@ -75,7 +76,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                 .fillMaxSize()
                 .background(GlanceTheme.colors.widgetBackground)
                 .cornerRadius(16.dp)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
         ) {
             Header(scoreboard, error)
             Spacer(GlanceModifier.height(2.dp))
@@ -159,14 +160,14 @@ class ScoreboardWidget : GlanceAppWidget() {
     private fun GameGridRow(games: List<Game>, logos: Map<Int, Bitmap>) {
         Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)) {
             games.forEachIndexed { index, game ->
-                if (index > 0) Spacer(GlanceModifier.width(8.dp))
+                if (index > 0) Spacer(GlanceModifier.width(6.dp))
                 GameCell(game, logos, GlanceModifier.defaultWeight())
             }
 
             // A final row of one or two games must not stretch its cells to fill
             // the width, or the columns stop lining up with the rows above.
             repeat(COLUMNS - games.size) {
-                Spacer(GlanceModifier.width(8.dp))
+                Spacer(GlanceModifier.width(6.dp))
                 Spacer(GlanceModifier.defaultWeight())
             }
         }
@@ -176,10 +177,31 @@ class ScoreboardWidget : GlanceAppWidget() {
     private fun GameCell(game: Game, logos: Map<Int, Bitmap>, modifier: GlanceModifier) {
         val context = LocalContext.current
 
-        Column(modifier = modifier.clickable(actionStartActivity(gameIntent(context, game)))) {
-            TeamLine(game.away, game.awayScore, game.state, leading(game, home = false), logos)
+        Column(
+            modifier = modifier
+                .clickable(actionStartActivity(gameIntent(context, game)))
+                // A card per game, so three across read as three things rather than
+                // one block of text. A live game gets the accent container, which
+                // makes the one worth looking at findable without reading.
+                .background(
+                    if (game.state.isLive) {
+                        GlanceTheme.colors.secondaryContainer
+                    } else {
+                        GlanceTheme.colors.surfaceVariant
+                    },
+                )
+                .cornerRadius(10.dp)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+        ) {
+            val onCard = if (game.state.isLive) {
+                GlanceTheme.colors.onSecondaryContainer
+            } else {
+                GlanceTheme.colors.onSurfaceVariant
+            }
+
+            TeamLine(game.away, game.awayScore, game.state, leading(game, home = false), logos, onCard)
             Spacer(GlanceModifier.height(2.dp))
-            TeamLine(game.home, game.homeScore, game.state, leading(game, home = true), logos)
+            TeamLine(game.home, game.homeScore, game.state, leading(game, home = true), logos, onCard)
 
             // Status sits under the matchup rather than beside it — at a third of
             // the width there is no room for a column of its own.
@@ -187,11 +209,9 @@ class ScoreboardWidget : GlanceAppWidget() {
                 text = game.compactStatus { TimeFormat.clock(it) },
                 style = TextStyle(
                     fontSize = 10.sp,
-                    color = if (game.state.isLive) {
-                        GlanceTheme.colors.error
-                    } else {
-                        GlanceTheme.colors.onSurfaceVariant
-                    },
+                    // The card colour now carries "live", so the status text no
+                    // longer needs to shout in red on top of it.
+                    color = onCard,
                     fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
                 ),
                 maxLines = 1,
@@ -208,6 +228,7 @@ class ScoreboardWidget : GlanceAppWidget() {
         state: GameState,
         leading: Boolean,
         logos: Map<Int, Bitmap>,
+        contentColor: ColorProvider,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val logo = logos[team.id]
@@ -228,7 +249,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                 text = team.abbreviation,
                 style = TextStyle(
                     fontSize = 14.sp,
-                    color = GlanceTheme.colors.onSurface,
+                    color = contentColor,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
                 ),
                 maxLines = 1,
@@ -239,7 +260,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                 text = if (state == GameState.PREVIEW) "" else score?.toString() ?: "-",
                 style = TextStyle(
                     fontSize = 14.sp,
-                    color = GlanceTheme.colors.onSurface,
+                    color = contentColor,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.End,
                 ),
