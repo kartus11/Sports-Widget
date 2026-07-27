@@ -77,10 +77,10 @@ class ScoreboardWidget : GlanceAppWidget() {
                 .fillMaxSize()
                 .background(GlanceTheme.colors.widgetBackground)
                 .cornerRadius(16.dp)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 5.dp),
         ) {
             Header(scoreboard, error)
-            Spacer(GlanceModifier.height(2.dp))
+            Spacer(GlanceModifier.height(1.dp))
 
             when {
                 // An error with no scoreboard is the only case where the widget has
@@ -151,7 +151,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                 style = TextStyle(fontSize = 16.sp, color = GlanceTheme.colors.primary),
                 modifier = GlanceModifier
                     .clickable(actionRunCallback<RefreshWidgetAction>())
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
             )
         }
     }
@@ -159,7 +159,7 @@ class ScoreboardWidget : GlanceAppWidget() {
     /** One row of up to [COLUMNS] games, padded so partial rows stay aligned. */
     @Composable
     private fun GameGridRow(games: List<Game>, logos: Map<Int, Bitmap>) {
-        Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 1.dp)) {
             games.forEachIndexed { index, game ->
                 if (index > 0) Spacer(GlanceModifier.width(6.dp))
                 GameCell(game, logos, GlanceModifier.defaultWeight())
@@ -192,7 +192,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                     },
                 )
                 .cornerRadius(10.dp)
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .padding(horizontal = 6.dp, vertical = 1.dp),
         ) {
             val onCard = if (game.state.isLive) {
                 GlanceTheme.colors.onSecondaryContainer
@@ -215,7 +215,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                 logos = logos,
                 contentColor = onCard,
             )
-            Spacer(GlanceModifier.height(2.dp))
+            Spacer(GlanceModifier.height(1.dp))
             TeamLine(
                 team = game.home,
                 // Blank rather than a repeat: one start time per game.
@@ -237,7 +237,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                     else -> game.compactStatus { TimeFormat.clock(it) }
                 },
                 style = TextStyle(
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     // The card colour now carries "live", so the status text no
                     // longer needs to shout in red on top of it.
                     color = onCard,
@@ -264,11 +264,11 @@ class ScoreboardWidget : GlanceAppWidget() {
                 Image(
                     provider = ImageProvider(logo),
                     contentDescription = null,
-                    modifier = GlanceModifier.size(16.dp),
+                    modifier = GlanceModifier.size(14.dp),
                 )
             } else {
                 // Hold the column so rows stay aligned when a logo is missing.
-                Spacer(GlanceModifier.width(16.dp))
+                Spacer(GlanceModifier.width(14.dp))
             }
 
             Spacer(GlanceModifier.width(6.dp))
@@ -276,7 +276,7 @@ class ScoreboardWidget : GlanceAppWidget() {
             Text(
                 text = team.abbreviation,
                 style = TextStyle(
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = contentColor,
                     // Always bold: three letters at 14sp on a tinted card need the
                     // weight to stay legible. The score still carries who is ahead.
@@ -291,7 +291,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                 style = TextStyle(
                     // The start time shares this column and needs to be smaller to
                     // fit; a score keeps the full size.
-                    fontSize = if (trailingWidth == SCORE_WIDTH) 14.sp else 10.sp,
+                    fontSize = if (trailingWidth == SCORE_WIDTH) 13.sp else 9.sp,
                     color = contentColor,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.End,
