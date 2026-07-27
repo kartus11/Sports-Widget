@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -199,14 +200,42 @@ class ScoreboardWidget : GlanceAppWidget() {
                 GlanceTheme.colors.onSurfaceVariant
             }
 
-            TeamLine(game.away, game.awayScore, game.state, leading(game, home = false), logos, onCard)
-            Spacer(GlanceModifier.height(2.dp))
-            TeamLine(game.home, game.homeScore, game.state, leading(game, home = true), logos, onCard)
+            // A scheduled game has no scores, so that column is free — the start
+            // time goes there, inline with the teams, instead of on its own line
+            // below. A game with scores cannot do the same: at a third of the
+            // width there is no room for both.
+            val upcoming = game.state == GameState.PREVIEW
+            val startTime = game.startTimeUtcMillis?.let { TimeFormat.clock(it) }.orEmpty()
 
-            // Status sits under the matchup rather than beside it — at a third of
-            // the width there is no room for a column of its own.
+            TeamLine(
+                team = game.away,
+                trailing = if (upcoming) startTime else game.awayScore?.toString() ?: "-",
+                trailingWidth = if (upcoming) TIME_WIDTH else SCORE_WIDTH,
+                leading = leading(game, home = false),
+                logos = logos,
+                contentColor = onCard,
+            )
+            Spacer(GlanceModifier.height(2.dp))
+            TeamLine(
+                team = game.home,
+                // Blank rather than a repeat: one start time per game.
+                trailing = if (upcoming) "" else game.homeScore?.toString() ?: "-",
+                trailingWidth = if (upcoming) TIME_WIDTH else SCORE_WIDTH,
+                leading = leading(game, home = true),
+                logos = logos,
+                contentColor = onCard,
+            )
+
+            // Kept even when empty so every card is the same height and the columns
+            // stay square across a row that mixes scheduled and finished games.
             Text(
-                text = game.compactStatus { TimeFormat.clock(it) },
+                text = when {
+                    // "Postponed" and friends still need saying; a plain "Scheduled"
+                    // adds nothing once the time is already on the row above.
+                    upcoming -> ""
+                    game.state == GameState.OFF -> game.detailedState
+                    else -> game.compactStatus { TimeFormat.clock(it) }
+                },
                 style = TextStyle(
                     fontSize = 10.sp,
                     // The card colour now carries "live", so the status text no
@@ -215,7 +244,6 @@ class ScoreboardWidget : GlanceAppWidget() {
                     fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
                 ),
                 maxLines = 1,
-                modifier = GlanceModifier.padding(top = 0.dp),
             )
         }
     }
@@ -224,8 +252,8 @@ class ScoreboardWidget : GlanceAppWidget() {
     @Composable
     private fun TeamLine(
         team: Team,
-        score: Int?,
-        state: GameState,
+        trailing: String,
+        trailingWidth: Dp,
         leading: Boolean,
         logos: Map<Int, Bitmap>,
         contentColor: ColorProvider,
@@ -250,22 +278,26 @@ class ScoreboardWidget : GlanceAppWidget() {
                 style = TextStyle(
                     fontSize = 14.sp,
                     color = contentColor,
-                    fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
+                    // Always bold: three letters at 14sp on a tinted card need the
+                    // weight to stay legible. The score still carries who is ahead.
+                    fontWeight = FontWeight.Bold,
                 ),
                 maxLines = 1,
                 modifier = GlanceModifier.defaultWeight(),
             )
 
             Text(
-                text = if (state == GameState.PREVIEW) "" else score?.toString() ?: "-",
+                text = trailing,
                 style = TextStyle(
-                    fontSize = 14.sp,
+                    // The start time shares this column and needs to be smaller to
+                    // fit; a score keeps the full size.
+                    fontSize = if (trailingWidth == SCORE_WIDTH) 14.sp else 10.sp,
                     color = contentColor,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.End,
                 ),
                 maxLines = 1,
-                modifier = GlanceModifier.width(22.dp),
+                modifier = GlanceModifier.width(trailingWidth),
             )
         }
     }
@@ -298,6 +330,10 @@ class ScoreboardWidget : GlanceAppWidget() {
     private companion object {
         /** Games per row. Three fits comfortably at a phone's widget width. */
         const val COLUMNS = 3
+
+        /** Right-hand column: a score is narrow, a start time needs the room. */
+        val SCORE_WIDTH = 22.dp
+        val TIME_WIDTH = 46.dp
     }
 
     private fun leading(game: Game, home: Boolean): Boolean {
