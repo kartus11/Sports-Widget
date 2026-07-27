@@ -1,10 +1,13 @@
 package com.kartus.sportswidget.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,14 +25,41 @@ import com.kartus.sportswidget.ui.theme.SportsWidgetTheme
 
 class MainActivity : ComponentActivity() {
 
+    /**
+     * Game the widget asked for, if any. Held as state rather than read straight
+     * from `intent` so that a second tap on an already-open app (which arrives via
+     * [onNewIntent], not a fresh [onCreate]) still routes.
+     */
+    private val pendingGamePk = mutableStateOf<Long?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        pendingGamePk.value = intent.gamePkOrNull()
+
         setContent {
             SportsWidgetTheme {
-                SportsApp()
+                SportsApp(
+                    pendingGamePk = pendingGamePk.value,
+                    onPendingGameHandled = { pendingGamePk.value = null },
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingGamePk.value = intent.gamePkOrNull()
+    }
+
+    companion object {
+        const val EXTRA_GAME_PK = "com.kartus.sportswidget.EXTRA_GAME_PK"
+
+        private fun Intent.gamePkOrNull(): Long? =
+            getLongExtra(EXTRA_GAME_PK, NO_GAME).takeIf { it != NO_GAME }
+
+        private const val NO_GAME = -1L
     }
 }
 
@@ -42,7 +72,10 @@ private object Routes {
 }
 
 @Composable
-private fun SportsApp() {
+private fun SportsApp(
+    pendingGamePk: Long?,
+    onPendingGameHandled: () -> Unit,
+) {
     val navController = rememberNavController()
     val repository = ServiceLocator.repository(LocalContext.current)
 
@@ -52,6 +85,14 @@ private fun SportsApp() {
         factory = ScoreboardViewModel.factory(repository),
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // A widget tap pushes the detail on top of the scoreboard rather than starting
+    // there, so Back lands on the schedule instead of leaving the app.
+    LaunchedEffect(pendingGamePk) {
+        val gamePk = pendingGamePk ?: return@LaunchedEffect
+        navController.navigate(Routes.gameDetail(gamePk)) { launchSingleTop = true }
+        onPendingGameHandled()
+    }
 
     NavHost(navController = navController, startDestination = Routes.SCOREBOARD) {
         composable(Routes.SCOREBOARD) {
@@ -75,6 +116,7 @@ private fun SportsApp() {
             val gamePk = entry.arguments?.getLong("gamePk") ?: return@composable
             GameDetailScreen(
                 game = state.games.firstOrNull { it.gamePk == gamePk },
+                scoreboardLoading = state.loading,
                 boxscore = state.boxscore,
                 boxscoreLoading = state.boxscoreLoading,
                 boxscoreError = state.boxscoreError,

@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,6 +54,7 @@ private enum class DetailTab(val label: String) {
 @Composable
 fun GameDetailScreen(
     game: Game?,
+    scoreboardLoading: Boolean,
     boxscore: Boxscore?,
     boxscoreLoading: Boolean,
     boxscoreError: String?,
@@ -90,13 +92,25 @@ fun GameDetailScreen(
         },
     ) { padding ->
         if (game == null) {
-            // Reachable if the process was restored straight onto this route with an
-            // empty scoreboard behind it.
+            // Cold start from a widget tap lands here before the scoreboard has
+            // loaded, which is a wait rather than a problem. Only once the load has
+            // finished without producing this game is it worth saying so — that
+            // means the widget's snapshot is older than today's schedule.
             Box(
                 modifier = Modifier.padding(padding).fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Game not loaded — go back and refresh.")
+                if (scoreboardLoading) {
+                    CircularProgressIndicator()
+                } else {
+                    Text(
+                        text = "That game isn't on today's schedule — pull the " +
+                            "scoreboard back and refresh.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(32.dp),
+                    )
+                }
             }
             return@Scaffold
         }
