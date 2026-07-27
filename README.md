@@ -7,9 +7,10 @@ home-screen widget.
   (inning-by-inning, R/H/E, count and outs), probable pitchers, and division
   standings. While a game is in progress and the screen is in front of you, the
   scoreboard refreshes itself every 20 seconds.
-- **On the home screen**: a Glance widget listing today's games with scores and
-  status, refreshed every 15 minutes plus a manual ⟳ button. A failed refresh says
-  so and keeps the previous scores rather than blanking.
+- **On the home screen**: a Glance widget showing today's games three across, with
+  team logos, scores and status. Tapping a game opens it in the app; Back returns
+  to the schedule. Refreshed every 15 minutes plus a manual ⟳ button, and a failed
+  refresh says so rather than blanking the scores it already has.
 
 Live games sort to the top of both surfaces; everything else follows first pitch.
 

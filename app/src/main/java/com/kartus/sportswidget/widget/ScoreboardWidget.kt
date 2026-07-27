@@ -75,10 +75,10 @@ class ScoreboardWidget : GlanceAppWidget() {
                 .fillMaxSize()
                 .background(GlanceTheme.colors.widgetBackground)
                 .cornerRadius(16.dp)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Header(scoreboard, error)
-            Spacer(GlanceModifier.height(4.dp))
+            Spacer(GlanceModifier.height(2.dp))
 
             when {
                 // An error with no scoreboard is the only case where the widget has
@@ -157,7 +157,7 @@ class ScoreboardWidget : GlanceAppWidget() {
     /** One row of up to [COLUMNS] games, padded so partial rows stay aligned. */
     @Composable
     private fun GameGridRow(games: List<Game>, logos: Map<Int, Bitmap>) {
-        Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)) {
             games.forEachIndexed { index, game ->
                 if (index > 0) Spacer(GlanceModifier.width(8.dp))
                 GameCell(game, logos, GlanceModifier.defaultWeight())
@@ -178,7 +178,7 @@ class ScoreboardWidget : GlanceAppWidget() {
 
         Column(modifier = modifier.clickable(actionStartActivity(gameIntent(context, game)))) {
             TeamLine(game.away, game.awayScore, game.state, leading(game, home = false), logos)
-            Spacer(GlanceModifier.height(4.dp))
+            Spacer(GlanceModifier.height(2.dp))
             TeamLine(game.home, game.homeScore, game.state, leading(game, home = true), logos)
 
             // Status sits under the matchup rather than beside it — at a third of
@@ -186,7 +186,7 @@ class ScoreboardWidget : GlanceAppWidget() {
             Text(
                 text = game.compactStatus { TimeFormat.clock(it) },
                 style = TextStyle(
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     color = if (game.state.isLive) {
                         GlanceTheme.colors.error
                     } else {
@@ -195,7 +195,7 @@ class ScoreboardWidget : GlanceAppWidget() {
                     fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
                 ),
                 maxLines = 1,
-                modifier = GlanceModifier.padding(top = 3.dp),
+                modifier = GlanceModifier.padding(top = 0.dp),
             )
         }
     }
@@ -215,11 +215,11 @@ class ScoreboardWidget : GlanceAppWidget() {
                 Image(
                     provider = ImageProvider(logo),
                     contentDescription = null,
-                    modifier = GlanceModifier.size(18.dp),
+                    modifier = GlanceModifier.size(16.dp),
                 )
             } else {
                 // Hold the column so rows stay aligned when a logo is missing.
-                Spacer(GlanceModifier.width(18.dp))
+                Spacer(GlanceModifier.width(16.dp))
             }
 
             Spacer(GlanceModifier.width(6.dp))
@@ -227,7 +227,7 @@ class ScoreboardWidget : GlanceAppWidget() {
             Text(
                 text = team.abbreviation,
                 style = TextStyle(
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = GlanceTheme.colors.onSurface,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
                 ),
@@ -238,7 +238,7 @@ class ScoreboardWidget : GlanceAppWidget() {
             Text(
                 text = if (state == GameState.PREVIEW) "" else score?.toString() ?: "-",
                 style = TextStyle(
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = GlanceTheme.colors.onSurface,
                     fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.End,
