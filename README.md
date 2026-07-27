@@ -16,9 +16,15 @@ Live games sort to the top of both surfaces; everything else follows first pitch
 MLB first because it's in season. The data layer is structured so other leagues
 can be added behind the same domain models.
 
-## Build
+## Getting a build
 
-Requires Android Studio (Ladybug or newer) — it ships the JDK and SDK you need.
+The easy path needs no toolchain at all: every push builds a debug APK in CI and
+uploads it as an artifact. Open the latest green run under the repo's Actions tab,
+download `sports-widget-debug-apk`, unzip, and install the `.apk` on the phone.
+Android will ask about installing from an unknown source.
+
+To build locally instead, Android Studio (Ladybug or newer) ships the JDK and SDK
+you need.
 
 ```
 git clone <this repo>
@@ -123,10 +129,15 @@ installable build. Two things are verified there on every run:
   own job and is allowed to fail without blocking the build, so an MLB outage or
   the offseason cannot turn CI red.
 
-What is **not** yet verified: how any of it looks or behaves on a real device.
-The APK compiles and its data layer is proven against live MLB data, but nobody
-has yet placed the widget on a home screen or watched a score tick over during a
-game. Layout, sizing and refresh behaviour are unconfirmed.
+Confirmed on a device (Samsung, One UI): the scoreboard, standings, game detail
+and box score all render against live data, and the widget populates and refreshes
+on the home screen.
+
+Still unconfirmed: how the widget behaves over days under an OEM battery manager —
+Samsung and Xiaomi in particular throttle background work aggressively, and no
+amount of correct WorkManager usage fully prevents that. Also unverified is live
+in-game behaviour over a long session: the 20-second foreground poll and the
+box score updating inning by inning have not been watched end to end.
 
 ## Adding another league later
 
