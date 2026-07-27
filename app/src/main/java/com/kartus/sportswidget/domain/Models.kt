@@ -159,3 +159,56 @@ data class Scoreboard(
 ) {
     val hasLiveGame: Boolean get() = games.any { it.state.isLive }
 }
+
+// ---- Box score ----
+
+@Serializable
+data class BatterLine(
+    val playerId: Int,
+    val name: String,
+    /** Fielding position abbreviation, e.g. "RF", "DH". */
+    val position: String,
+    val atBats: Int,
+    val runs: Int,
+    val hits: Int,
+    val rbi: Int,
+    val walks: Int,
+    val strikeouts: Int,
+    val homeRuns: Int,
+    /** Season average, not this game's — the game line does not carry one. */
+    val seasonAvg: String?,
+    /** True for a substitute, who is conventionally indented under the starter. */
+    val isSubstitute: Boolean,
+)
+
+@Serializable
+data class PitcherLine(
+    val playerId: Int,
+    val name: String,
+    /** StatsAPI reports this as a string ("6.1"), and thirds do not divide. */
+    val inningsPitched: String,
+    val hits: Int,
+    val runs: Int,
+    val earnedRuns: Int,
+    val walks: Int,
+    val strikeouts: Int,
+    val homeRuns: Int,
+    val seasonEra: String?,
+)
+
+@Serializable
+data class TeamBoxscore(
+    val team: Team,
+    val batters: List<BatterLine>,
+    val pitchers: List<PitcherLine>,
+) {
+    val isEmpty: Boolean get() = batters.isEmpty() && pitchers.isEmpty()
+}
+
+@Serializable
+data class Boxscore(
+    val away: TeamBoxscore,
+    val home: TeamBoxscore,
+) {
+    val isEmpty: Boolean get() = away.isEmpty && home.isEmpty
+}

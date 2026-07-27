@@ -1,5 +1,6 @@
 package com.kartus.sportswidget
 
+import com.kartus.sportswidget.data.BoxscoreResponse
 import com.kartus.sportswidget.data.ScheduleResponse
 import com.kartus.sportswidget.data.StandingsResponse
 import com.kartus.sportswidget.data.StatsApiMapper
@@ -176,6 +177,37 @@ class LiveStatsApiContractTest {
         assertTrue("Win total looks unset", row.wins > 0 || row.losses > 0)
         assertTrue("winningPercentage missing", row.winningPercentage != "-")
         assertNotNull("streakCode missing", row.streak)
+    }
+
+    @Test
+    fun `boxscore endpoint yields real batting and pitching lines`() {
+        val finals = recentSchedule().filter { it.state == com.kartus.sportswidget.domain.GameState.FINAL }
+        assumeTrue("No completed games in window", finals.isNotEmpty())
+
+        val body = fetch("$BASE/api/v1/game/${finals.first().gamePk}/boxscore")
+        val boxscore = requireNotNull(
+            StatsApiMapper.toBoxscore(json.decodeFromString(BoxscoreResponse.serializer(), body)),
+        ) { "Box score did not map — teams block missing or renamed" }
+
+        assertFalse("Away side has no batters", boxscore.away.batters.isEmpty())
+        assertFalse("Home side has no batters", boxscore.home.batters.isEmpty())
+        assertFalse("Away side has no pitchers", boxscore.away.pitchers.isEmpty())
+
+        // A completed nine-inning game always has someone with a plate appearance
+        // and a pitcher who recorded outs. All-zero lines would mean the stats block
+        // moved rather than that nothing happened.
+        assertTrue(
+            "Every batting line is empty — stats keys likely changed",
+            boxscore.away.batters.any { it.atBats > 0 },
+        )
+        assertTrue(
+            "No pitcher recorded innings — inningsPitched likely changed",
+            boxscore.away.pitchers.any { it.inningsPitched != "0.0" },
+        )
+        assertNotNull(
+            "Season avg missing — it lives in seasonStats, not the game line",
+            boxscore.away.batters.firstOrNull { it.atBats > 0 }?.seasonAvg,
+        )
     }
 
     @Test

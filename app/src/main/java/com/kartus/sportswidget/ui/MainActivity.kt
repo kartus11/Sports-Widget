@@ -75,6 +75,11 @@ private fun SportsApp() {
             val gamePk = entry.arguments?.getLong("gamePk") ?: return@composable
             GameDetailScreen(
                 game = state.games.firstOrNull { it.gamePk == gamePk },
+                boxscore = state.boxscore,
+                boxscoreLoading = state.boxscoreLoading,
+                boxscoreError = state.boxscoreError,
+                onOpenBoxscore = viewModel::openBoxscore,
+                onCloseBoxscore = viewModel::closeBoxscore,
                 onBack = { navController.popBackStack() },
             )
         }

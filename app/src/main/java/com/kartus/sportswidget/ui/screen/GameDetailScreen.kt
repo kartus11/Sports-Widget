@@ -22,23 +22,56 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.kartus.sportswidget.domain.Boxscore
 import com.kartus.sportswidget.domain.Game
 import com.kartus.sportswidget.domain.GameState
 import com.kartus.sportswidget.domain.Linescore
 import com.kartus.sportswidget.domain.Team
 import com.kartus.sportswidget.util.TimeFormat
 
+private enum class DetailTab(val label: String) {
+    GAME("Game"),
+    BOX_SCORE("Box Score"),
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GameDetailScreen(game: Game?, onBack: () -> Unit) {
+fun GameDetailScreen(
+    game: Game?,
+    boxscore: Boxscore?,
+    boxscoreLoading: Boolean,
+    boxscoreError: String?,
+    onOpenBoxscore: (Long) -> Unit,
+    onCloseBoxscore: () -> Unit,
+    onBack: () -> Unit,
+) {
+    var selectedTab by rememberSaveable { mutableStateOf(DetailTab.GAME) }
+
+    // Loading starts as soon as the screen opens rather than when the tab is first
+    // shown, so switching to it is instant. Closing releases the poll loop's hold
+    // on this game.
+    if (game != null) {
+        DisposableEffect(game.gamePk) {
+            onOpenBoxscore(game.gamePk)
+            onDispose { onCloseBoxscore() }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -68,17 +101,36 @@ fun GameDetailScreen(game: Game?, onBack: () -> Unit) {
             return@Scaffold
         }
 
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            ScoreHeader(game)
-            game.linescore?.let { LinescoreTable(game, it) }
-            GameInfo(game)
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            TabRow(selectedTabIndex = selectedTab.ordinal) {
+                DetailTab.entries.forEach { tab ->
+                    Tab(
+                        selected = selectedTab == tab,
+                        onClick = { selectedTab = tab },
+                        text = { Text(tab.label) },
+                    )
+                }
+            }
+
+            when (selectedTab) {
+                DetailTab.GAME -> Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    ScoreHeader(game)
+                    game.linescore?.let { LinescoreTable(game, it) }
+                    GameInfo(game)
+                }
+
+                DetailTab.BOX_SCORE -> BoxScoreTab(
+                    boxscore = boxscore,
+                    loading = boxscoreLoading && boxscore == null,
+                    error = boxscoreError,
+                )
+            }
         }
     }
 }

@@ -1,11 +1,15 @@
 package com.kartus.sportswidget.data
 
+import com.kartus.sportswidget.domain.BatterLine
+import com.kartus.sportswidget.domain.Boxscore
 import com.kartus.sportswidget.domain.DivisionStandings
 import com.kartus.sportswidget.domain.Game
 import com.kartus.sportswidget.domain.GameState
 import com.kartus.sportswidget.domain.InningLine
 import com.kartus.sportswidget.domain.Linescore
+import com.kartus.sportswidget.domain.PitcherLine
 import com.kartus.sportswidget.domain.StandingsRow
+import com.kartus.sportswidget.domain.TeamBoxscore
 import com.kartus.sportswidget.domain.Team
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -78,6 +82,69 @@ object StatsApiMapper {
         strikes = dto.strikes,
         outs = dto.outs,
     )
+
+    fun toBoxscore(response: BoxscoreResponse): Boxscore? {
+        val away = toTeamBoxscore(response.teams?.away) ?: return null
+        val home = toTeamBoxscore(response.teams?.home) ?: return null
+        return Boxscore(away = away, home = home)
+    }
+
+    private fun toTeamBoxscore(dto: BoxscoreTeamDto?): TeamBoxscore? {
+        if (dto == null) return null
+        val team = toTeam(dto.team) ?: return null
+
+        // `batters` and `pitchers` are already in box-score order, and using them
+        // avoids having to infer participation from an empty stats object.
+        return TeamBoxscore(
+            team = team,
+            batters = dto.batters.mapNotNull { id ->
+                dto.players["ID$id"]?.let { toBatterLine(id, it) }
+            },
+            pitchers = dto.pitchers.mapNotNull { id ->
+                dto.players["ID$id"]?.let { toPitcherLine(id, it) }
+            },
+        )
+    }
+
+    private fun toBatterLine(playerId: Int, dto: BoxPlayerDto): BatterLine? {
+        val name = dto.person?.fullName ?: return null
+        val batting = dto.stats?.batting
+
+        return BatterLine(
+            playerId = playerId,
+            name = name,
+            position = dto.position?.abbreviation ?: "-",
+            atBats = batting?.atBats ?: 0,
+            runs = batting?.runs ?: 0,
+            hits = batting?.hits ?: 0,
+            rbi = batting?.rbi ?: 0,
+            walks = batting?.baseOnBalls ?: 0,
+            strikeouts = batting?.strikeOuts ?: 0,
+            homeRuns = batting?.homeRuns ?: 0,
+            seasonAvg = dto.seasonStats?.batting?.avg,
+            // battingOrder is "100" for the leadoff starter, "101" for the first
+            // player to replace them, "200" for the number-two hitter, and so on.
+            isSubstitute = dto.battingOrder?.let { it.length >= 3 && !it.endsWith("00") } ?: false,
+        )
+    }
+
+    private fun toPitcherLine(playerId: Int, dto: BoxPlayerDto): PitcherLine? {
+        val name = dto.person?.fullName ?: return null
+        val pitching = dto.stats?.pitching
+
+        return PitcherLine(
+            playerId = playerId,
+            name = name,
+            inningsPitched = pitching?.inningsPitched ?: "0.0",
+            hits = pitching?.hits ?: 0,
+            runs = pitching?.runs ?: 0,
+            earnedRuns = pitching?.earnedRuns ?: 0,
+            walks = pitching?.baseOnBalls ?: 0,
+            strikeouts = pitching?.strikeOuts ?: 0,
+            homeRuns = pitching?.homeRuns ?: 0,
+            seasonEra = dto.seasonStats?.pitching?.era,
+        )
+    }
 
     fun toStandings(response: StandingsResponse): List<DivisionStandings> =
         response.records.mapNotNull { record ->

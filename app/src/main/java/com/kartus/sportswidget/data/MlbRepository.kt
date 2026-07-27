@@ -1,5 +1,6 @@
 package com.kartus.sportswidget.data
 
+import com.kartus.sportswidget.domain.Boxscore
 import com.kartus.sportswidget.domain.DivisionStandings
 import com.kartus.sportswidget.domain.Linescore
 import com.kartus.sportswidget.domain.Scoreboard
@@ -22,6 +23,7 @@ class MlbRepository(private val api: StatsApiClient) {
     private val mutex = Mutex()
     private val scoreboards = mutableMapOf<String, Scoreboard>()
     private var standingsCache: Pair<Long, List<DivisionStandings>>? = null
+    private val boxscores = mutableMapOf<Long, Pair<Long, Boxscore>>()
 
     /**
      * Scoreboard for [date]. Returns the cached copy when it is younger than the
@@ -73,6 +75,27 @@ class MlbRepository(private val api: StatsApiClient) {
         }
     }
 
+    /**
+     * Box score for one game. Cached briefly: during a live game these lines change
+     * every half inning, but re-opening the same finished game should not re-fetch.
+     */
+    suspend fun boxscore(gamePk: Long, force: Boolean = false): Result<Boxscore> {
+        mutex.withLock { boxscores[gamePk] }?.let { (fetchedAt, cached) ->
+            if (!force && System.currentTimeMillis() - fetchedAt < BOXSCORE_TTL_MILLIS) {
+                return Result.success(cached)
+            }
+        }
+
+        return runCatching {
+            val boxscore = StatsApiMapper.toBoxscore(api.boxscore(gamePk))
+                ?: error("Box score not available for this game")
+            mutex.withLock { boxscores[gamePk] = System.currentTimeMillis() to boxscore }
+            boxscore
+        }.recoverCatching { error ->
+            mutex.withLock { boxscores[gamePk] }?.second ?: throw error
+        }
+    }
+
     suspend fun linescore(gamePk: Long): Result<Linescore> = runCatching {
         StatsApiMapper.toLinescore(api.linescore(gamePk))
     }
@@ -92,5 +115,6 @@ class MlbRepository(private val api: StatsApiClient) {
         const val LIVE_TTL_MILLIS = 15_000L
         const val IDLE_TTL_MILLIS = 5 * 60_000L
         const val STANDINGS_TTL_MILLIS = 30 * 60_000L
+        const val BOXSCORE_TTL_MILLIS = 20_000L
     }
 }

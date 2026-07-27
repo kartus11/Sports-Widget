@@ -165,3 +165,79 @@ data class TeamRecordDto(
 data class StreakDto(
     @SerialName("streakCode") val code: String? = null,
 )
+
+// ---- Box score ----
+
+@Serializable
+data class BoxscoreResponse(
+    val teams: BoxscoreTeamsDto? = null,
+)
+
+@Serializable
+data class BoxscoreTeamsDto(
+    val away: BoxscoreTeamDto? = null,
+    val home: BoxscoreTeamDto? = null,
+)
+
+@Serializable
+data class BoxscoreTeamDto(
+    val team: TeamDto? = null,
+    /**
+     * Keyed by "ID{personId}" rather than a plain id, so this stays a String map.
+     * [batters] and [pitchers] carry the ids in box-score order and are the
+     * authoritative answer to who actually appeared — a position player's entry
+     * still contains an empty `pitching` object.
+     */
+    val players: Map<String, BoxPlayerDto> = emptyMap(),
+    val batters: List<Int> = emptyList(),
+    val pitchers: List<Int> = emptyList(),
+)
+
+@Serializable
+data class BoxPlayerDto(
+    val person: PersonDto? = null,
+    val jerseyNumber: String? = null,
+    val position: PositionDto? = null,
+    /** This game's line. */
+    val stats: BoxStatsDto? = null,
+    /** Season totals — where avg and era live; the game line has neither. */
+    val seasonStats: BoxStatsDto? = null,
+    val battingOrder: String? = null,
+)
+
+@Serializable
+data class PositionDto(
+    val abbreviation: String? = null,
+)
+
+@Serializable
+data class BoxStatsDto(
+    val batting: BattingStatsDto? = null,
+    val pitching: PitchingStatsDto? = null,
+)
+
+@Serializable
+data class BattingStatsDto(
+    val atBats: Int? = null,
+    val runs: Int? = null,
+    val hits: Int? = null,
+    val doubles: Int? = null,
+    val triples: Int? = null,
+    val homeRuns: Int? = null,
+    val rbi: Int? = null,
+    val baseOnBalls: Int? = null,
+    val strikeOuts: Int? = null,
+    val avg: String? = null,
+)
+
+@Serializable
+data class PitchingStatsDto(
+    val inningsPitched: String? = null,
+    val hits: Int? = null,
+    val runs: Int? = null,
+    val earnedRuns: Int? = null,
+    val homeRuns: Int? = null,
+    val baseOnBalls: Int? = null,
+    val strikeOuts: Int? = null,
+    val era: String? = null,
+)

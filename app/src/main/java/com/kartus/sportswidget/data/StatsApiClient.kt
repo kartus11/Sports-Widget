@@ -47,6 +47,12 @@ class StatsApiClient(cacheDir: File) {
         StandingsResponse.serializer(),
     )
 
+    /** Per-player batting and pitching lines for one game. */
+    suspend fun boxscore(gamePk: Long): BoxscoreResponse = get(
+        "$BASE/api/v1/game/$gamePk/boxscore",
+        BoxscoreResponse.serializer(),
+    )
+
     /** Inning-by-inning detail for one game. */
     suspend fun linescore(gamePk: Long): LinescoreDto = get(
         "$BASE/api/v1/game/$gamePk/linescore",
