@@ -49,6 +49,15 @@ Endpoints used:
 | Day's games | `/api/v1/schedule?sportId=1&date=YYYY-MM-DD&hydrate=team,linescore,probablePitcher,venue` |
 | Standings | `/api/v1/standings?leagueId=103,104&season=YYYY&standingsTypes=regularSeason&hydrate=team,division` |
 | Game linescore | `/api/v1/game/{gamePk}/linescore` |
+| Team logo | `midfield.mlbstatic.com/v1/team/{teamId}/spots/{size}` |
+
+Logos are keyed by the same team id the schedule returns, so there is no
+name-to-asset table to maintain and a rebrand needs no release. Coil loads and
+caches them in the app. The widget cannot use Coil — a widget renders to
+`RemoteViews` and needs a real `Bitmap` at composition time — so the refresh
+worker writes PNGs to `filesDir` and `provideGlance` decodes them before
+providing content. A logo that fails to load renders as empty space, never a
+placeholder.
 
 Because it's someone else's server, requests are cached on disk by OkHttp and the
 repository puts a floor under refresh frequency: 15s while a game is live, 5
