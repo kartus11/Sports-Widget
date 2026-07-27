@@ -120,8 +120,11 @@ private fun SportsApp(
                 boxscore = state.boxscore,
                 boxscoreLoading = state.boxscoreLoading,
                 boxscoreError = state.boxscoreError,
-                onOpenBoxscore = viewModel::openBoxscore,
-                onCloseBoxscore = viewModel::closeBoxscore,
+                gamecast = state.gamecast,
+                gamecastLoading = state.gamecastLoading,
+                gamecastError = state.gamecastError,
+                onOpenGame = viewModel::openGame,
+                onCloseGame = viewModel::closeGame,
                 onBack = { navController.popBackStack() },
             )
         }

@@ -1,6 +1,7 @@
 package com.kartus.sportswidget
 
 import com.kartus.sportswidget.data.BoxscoreResponse
+import com.kartus.sportswidget.data.PlayByPlayResponse
 import com.kartus.sportswidget.data.ScheduleResponse
 import com.kartus.sportswidget.data.StandingsResponse
 import com.kartus.sportswidget.data.StatsApiMapper
@@ -208,6 +209,60 @@ class LiveStatsApiContractTest {
             "Season avg missing — it lives in seasonStats, not the game line",
             boxscore.away.batters.firstOrNull { it.atBats > 0 }?.seasonAvg,
         )
+    }
+
+    @Test
+    fun `playByPlay yields scoring plays whose indices resolve`() {
+        // A completed game that actually scored — scoringPlays is empty in a
+        // scoreless game, which would make this vacuous.
+        val scored = recentSchedule().firstOrNull {
+            it.state == com.kartus.sportswidget.domain.GameState.FINAL &&
+                (it.awayScore ?: 0) + (it.homeScore ?: 0) > 0
+        }
+        assumeTrue("No completed game with runs in window", scored != null)
+
+        val body = fetch("$BASE/api/v1/game/${scored!!.gamePk}/playByPlay")
+        val parsed = json.decodeFromString(PlayByPlayResponse.serializer(), body)
+
+        assertFalse("allPlays is empty — the response shape changed", parsed.allPlays.isEmpty())
+        assertFalse("scoringPlays is empty for a game with runs", parsed.scoringPlays.isEmpty())
+
+        val plays = StatsApiMapper.toScoringPlays(parsed)
+        assertFalse("No scoring play survived mapping", plays.isEmpty())
+        assertTrue(
+            "A scoring play has no description",
+            plays.all { it.description.isNotBlank() },
+        )
+        assertTrue(
+            "Final score should match the last scoring play's running total",
+            plays.last().awayScore + plays.last().homeScore > 0,
+        )
+    }
+
+    @Test
+    fun `a live game's linescore carries the offense and defense blocks`() {
+        // Only a game in progress has a situation to report; outside game hours
+        // this legitimately has nothing to check.
+        val live = recentSchedule().firstOrNull {
+            it.state == com.kartus.sportswidget.domain.GameState.LIVE
+        }
+        assumeTrue("No game in progress right now", live != null)
+
+        val body = fetch("$BASE/api/v1/game/${live!!.gamePk}/linescore")
+        val dto = json.decodeFromString(
+            com.kartus.sportswidget.data.LinescoreDto.serializer(),
+            body,
+        )
+        val situation = StatsApiMapper.toSituation(dto)
+
+        assertNotNull(
+            "Live linescore has no offense block — the Gamecast situation panel " +
+                "depends on it",
+            situation,
+        )
+        assertNotNull("No batter in the offense block", situation!!.batter)
+        assertNotNull("No pitcher in the defense block", situation.pitcher)
+        assertTrue("Outs outside 0..2 for a live game", situation.outs in 0..2)
     }
 
     @Test

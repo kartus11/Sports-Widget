@@ -194,6 +194,8 @@ data class PitcherLine(
     val strikeouts: Int,
     val homeRuns: Int,
     val seasonEra: String?,
+    /** Pitches thrown in this game, which the Gamecast shows for the active arm. */
+    val pitchCount: Int? = null,
 )
 
 @Serializable
@@ -212,3 +214,49 @@ data class Boxscore(
 ) {
     val isEmpty: Boolean get() = away.isEmpty && home.isEmpty
 }
+
+// ---- Gamecast ----
+
+@Serializable
+data class PlayerRef(val id: Int, val name: String)
+
+/** What is happening right now. Only meaningful while a game is in progress. */
+@Serializable
+data class GameSituation(
+    val balls: Int,
+    val strikes: Int,
+    val outs: Int,
+    val batter: PlayerRef? = null,
+    val onDeck: PlayerRef? = null,
+    val pitcher: PlayerRef? = null,
+    val runnerOnFirst: Boolean = false,
+    val runnerOnSecond: Boolean = false,
+    val runnerOnThird: Boolean = false,
+    /** The pitcher's total for the game, from the box score. */
+    val pitchCount: Int? = null,
+    val pitcherEra: String? = null,
+    val batterSeasonAvg: String? = null,
+    /** Today's line for the batter, e.g. "1-for-2". */
+    val batterToday: String? = null,
+)
+
+@Serializable
+data class ScoringPlay(
+    val inning: Int,
+    val isTopInning: Boolean,
+    val description: String,
+    /** Score after the play. */
+    val awayScore: Int,
+    val homeScore: Int,
+) {
+    /** "Top 5" / "Bot 5", matching how the scoreboard labels a half-inning. */
+    val halfInningLabel: String get() = "${if (isTopInning) "Top" else "Bot"} $inning"
+}
+
+@Serializable
+data class Gamecast(
+    val linescore: Linescore,
+    /** Null for a game that has not started, or has finished. */
+    val situation: GameSituation? = null,
+    val scoringPlays: List<ScoringPlay> = emptyList(),
+)

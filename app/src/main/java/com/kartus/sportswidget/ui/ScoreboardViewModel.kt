@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.kartus.sportswidget.data.MlbRepository
 import com.kartus.sportswidget.domain.Boxscore
+import com.kartus.sportswidget.domain.Gamecast
 import com.kartus.sportswidget.domain.DivisionStandings
 import com.kartus.sportswidget.domain.Game
 import kotlinx.coroutines.Job
@@ -37,11 +38,14 @@ class ScoreboardViewModel(private val repository: MlbRepository) : ViewModel() {
         val refreshing: Boolean = false,
         val errorMessage: String? = null,
         val lastUpdatedMillis: Long? = null,
-        /** Box score for whichever game the detail screen is showing, if any. */
+        /** Detail for whichever game the detail screen is showing, if any. */
+        val openGamePk: Long? = null,
         val boxscore: Boxscore? = null,
-        val boxscoreGamePk: Long? = null,
         val boxscoreLoading: Boolean = false,
         val boxscoreError: String? = null,
+        val gamecast: Gamecast? = null,
+        val gamecastLoading: Boolean = false,
+        val gamecastError: String? = null,
     ) {
         val hasLiveGame: Boolean get() = games.any { it.state.isLive }
         val isToday: Boolean get() = date == LocalDate.now()
@@ -104,25 +108,58 @@ class ScoreboardViewModel(private val repository: MlbRepository) : ViewModel() {
 
     /**
      * Called when the detail screen opens. Also marks this game as the one the poll
-     * loop should keep fresh, so a box score stays current during a live game
-     * instead of freezing at whatever inning it was opened on.
+     * loop should keep fresh, so the box score and gamecast stay current during a
+     * live game instead of freezing at whatever inning they were opened on.
      */
-    fun openBoxscore(gamePk: Long) {
-        if (_state.value.boxscoreGamePk == gamePk && _state.value.boxscore != null) return
+    fun openGame(gamePk: Long) {
+        if (_state.value.openGamePk == gamePk) return
         _state.update {
             it.copy(
-                boxscoreGamePk = gamePk,
+                openGamePk = gamePk,
                 boxscore = null,
                 boxscoreLoading = true,
                 boxscoreError = null,
+                gamecast = null,
+                gamecastLoading = true,
+                gamecastError = null,
             )
         }
         fetchBoxscore(gamePk, force = false)
+        fetchGamecast(gamePk, force = false)
     }
 
-    fun closeBoxscore() {
+    fun closeGame() {
         _state.update {
-            it.copy(boxscoreGamePk = null, boxscore = null, boxscoreLoading = false, boxscoreError = null)
+            it.copy(
+                openGamePk = null,
+                boxscore = null,
+                boxscoreLoading = false,
+                boxscoreError = null,
+                gamecast = null,
+                gamecastLoading = false,
+                gamecastError = null,
+            )
+        }
+    }
+
+    private fun fetchGamecast(gamePk: Long, force: Boolean) {
+        viewModelScope.launch {
+            repository.gamecast(gamePk, force = force)
+                .onSuccess { gamecast ->
+                    if (_state.value.openGamePk != gamePk) return@onSuccess
+                    _state.update {
+                        it.copy(gamecast = gamecast, gamecastLoading = false, gamecastError = null)
+                    }
+                }
+                .onFailure { error ->
+                    if (_state.value.openGamePk != gamePk) return@onFailure
+                    _state.update {
+                        it.copy(
+                            gamecastLoading = false,
+                            gamecastError = error.message ?: "Couldn't load the gamecast",
+                        )
+                    }
+                }
         }
     }
 
@@ -131,13 +168,13 @@ class ScoreboardViewModel(private val repository: MlbRepository) : ViewModel() {
             repository.boxscore(gamePk, force = force)
                 .onSuccess { boxscore ->
                     // Ignore a slow response for a game the user already backed out of.
-                    if (_state.value.boxscoreGamePk != gamePk) return@onSuccess
+                    if (_state.value.openGamePk != gamePk) return@onSuccess
                     _state.update {
                         it.copy(boxscore = boxscore, boxscoreLoading = false, boxscoreError = null)
                     }
                 }
                 .onFailure { error ->
-                    if (_state.value.boxscoreGamePk != gamePk) return@onFailure
+                    if (_state.value.openGamePk != gamePk) return@onFailure
                     _state.update {
                         it.copy(
                             boxscoreLoading = false,
@@ -171,10 +208,11 @@ class ScoreboardViewModel(private val repository: MlbRepository) : ViewModel() {
                 if (current.hasLiveGame && current.isToday) {
                     load(force = true)
                 }
-                // Keep an open box score moving in step with the scoreboard.
-                current.boxscoreGamePk?.let { gamePk ->
+                // Keep an open game's detail moving in step with the scoreboard.
+                current.openGamePk?.let { gamePk ->
                     if (current.games.firstOrNull { it.gamePk == gamePk }?.state?.isLive == true) {
                         fetchBoxscore(gamePk, force = true)
+                        fetchGamecast(gamePk, force = true)
                     }
                 }
             }

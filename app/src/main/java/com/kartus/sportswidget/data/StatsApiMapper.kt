@@ -4,10 +4,13 @@ import com.kartus.sportswidget.domain.BatterLine
 import com.kartus.sportswidget.domain.Boxscore
 import com.kartus.sportswidget.domain.DivisionStandings
 import com.kartus.sportswidget.domain.Game
+import com.kartus.sportswidget.domain.GameSituation
 import com.kartus.sportswidget.domain.GameState
 import com.kartus.sportswidget.domain.InningLine
 import com.kartus.sportswidget.domain.Linescore
 import com.kartus.sportswidget.domain.PitcherLine
+import com.kartus.sportswidget.domain.PlayerRef
+import com.kartus.sportswidget.domain.ScoringPlay
 import com.kartus.sportswidget.domain.StandingsRow
 import com.kartus.sportswidget.domain.TeamBoxscore
 import com.kartus.sportswidget.domain.Team
@@ -158,7 +161,65 @@ object StatsApiMapper {
             strikeouts = pitching?.strikeOuts ?: 0,
             homeRuns = pitching?.homeRuns ?: 0,
             seasonEra = dto.seasonStats?.pitching?.era,
+            pitchCount = pitching?.numberOfPitches,
         )
+    }
+
+    /**
+     * The live situation, or null when there is nothing in progress to describe.
+     *
+     * Runners come from `offense` only. `defense` carries identically named
+     * `first`/`second`/`third` fields holding the fielders at those positions, so
+     * reading bases from the wrong side reports a loaded diamond every game.
+     */
+    fun toSituation(dto: LinescoreDto): GameSituation? {
+        val offense = dto.offense ?: return null
+
+        return GameSituation(
+            balls = dto.balls ?: 0,
+            strikes = dto.strikes ?: 0,
+            outs = dto.outs ?: 0,
+            batter = offense.batter?.toRef(),
+            onDeck = offense.onDeck?.toRef(),
+            pitcher = dto.defense?.pitcher?.toRef(),
+            runnerOnFirst = offense.first != null,
+            runnerOnSecond = offense.second != null,
+            runnerOnThird = offense.third != null,
+        )
+    }
+
+    /**
+     * StatsAPI gives `scoringPlays` as indices into `allPlays` rather than the
+     * plays themselves, so a stale or truncated index list must not throw.
+     */
+    fun toScoringPlays(response: PlayByPlayResponse): List<ScoringPlay> =
+        response.scoringPlays
+            .mapNotNull { index -> response.allPlays.getOrNull(index) }
+            .mapNotNull(::toScoringPlay)
+
+    private fun toScoringPlay(dto: PlayDto): ScoringPlay? {
+        val about = dto.about ?: return null
+        val result = dto.result ?: return null
+        val inning = about.inning ?: return null
+        val description = result.description?.takeIf { it.isNotBlank() } ?: return null
+
+        return ScoringPlay(
+            inning = inning,
+            // `halfInning` is the fallback because isTopInning is the field most
+            // likely to be the one that disappears.
+            isTopInning = about.isTopInning
+                ?: about.halfInning?.equals("top", ignoreCase = true)
+                ?: true,
+            description = description,
+            awayScore = result.awayScore ?: 0,
+            homeScore = result.homeScore ?: 0,
+        )
+    }
+
+    private fun PersonDto.toRef(): PlayerRef? {
+        val personId = id ?: return null
+        val personName = fullName ?: return null
+        return PlayerRef(personId, personName)
     }
 
     fun toStandings(response: StandingsResponse): List<DivisionStandings> =

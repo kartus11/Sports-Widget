@@ -1,6 +1,8 @@
 package com.kartus.sportswidget.data
 
 import com.kartus.sportswidget.domain.Boxscore
+import com.kartus.sportswidget.domain.GameSituation
+import com.kartus.sportswidget.domain.Gamecast
 import com.kartus.sportswidget.domain.DivisionStandings
 import com.kartus.sportswidget.domain.Linescore
 import com.kartus.sportswidget.domain.Scoreboard
@@ -98,6 +100,57 @@ class MlbRepository(private val api: StatsApiClient) {
 
     suspend fun linescore(gamePk: Long): Result<Linescore> = runCatching {
         StatsApiMapper.toLinescore(api.linescore(gamePk))
+    }
+
+    /**
+     * Everything the Gamecast shows, assembled from three small endpoints rather
+     * than `feed/live`, which is megabytes per call and unsuited to a 20-second
+     * poll on a phone.
+     *
+     * The box score is only consulted for the pitch count and the batter's line —
+     * it is already cached for the Box Score tab, so this usually costs nothing.
+     * If it fails, the rest of the Gamecast still renders.
+     */
+    suspend fun gamecast(gamePk: Long, force: Boolean = false): Result<Gamecast> = runCatching {
+        val linescoreDto = api.linescore(gamePk)
+        val linescore = StatsApiMapper.toLinescore(linescoreDto)
+        val situation = StatsApiMapper.toSituation(linescoreDto)
+
+        val scoringPlays = runCatching {
+            StatsApiMapper.toScoringPlays(api.playByPlay(gamePk))
+        }.getOrDefault(emptyList())
+
+        Gamecast(
+            linescore = linescore,
+            situation = situation?.let { withBoxscoreDetail(gamePk, it, force) },
+            // Newest first: during a live game the play that just happened is the
+            // one worth reading.
+            scoringPlays = scoringPlays.reversed(),
+        )
+    }
+
+    /** Folds the pitch count and the batter's day into the situation, if available. */
+    private suspend fun withBoxscoreDetail(
+        gamePk: Long,
+        situation: GameSituation,
+        force: Boolean,
+    ): GameSituation {
+        val boxscore = boxscore(gamePk, force = force).getOrNull() ?: return situation
+        val sides = listOf(boxscore.away, boxscore.home)
+
+        val pitcher = situation.pitcher?.let { ref ->
+            sides.flatMap { it.pitchers }.firstOrNull { it.playerId == ref.id }
+        }
+        val batter = situation.batter?.let { ref ->
+            sides.flatMap { it.batters }.firstOrNull { it.playerId == ref.id }
+        }
+
+        return situation.copy(
+            pitchCount = pitcher?.pitchCount,
+            pitcherEra = pitcher?.seasonEra,
+            batterSeasonAvg = batter?.seasonAvg,
+            batterToday = batter?.let { "${it.hits}-for-${it.atBats}" },
+        )
     }
 
     /**

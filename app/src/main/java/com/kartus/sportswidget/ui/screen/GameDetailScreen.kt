@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kartus.sportswidget.domain.Boxscore
 import com.kartus.sportswidget.domain.Game
+import com.kartus.sportswidget.domain.Gamecast
 import com.kartus.sportswidget.domain.GameState
 import com.kartus.sportswidget.domain.Linescore
 import com.kartus.sportswidget.domain.Team
@@ -47,6 +48,7 @@ import com.kartus.sportswidget.util.TimeFormat
 
 private enum class DetailTab(val label: String) {
     GAME("Game"),
+    GAMECAST("Gamecast"),
     BOX_SCORE("Box Score"),
 }
 
@@ -58,19 +60,22 @@ fun GameDetailScreen(
     boxscore: Boxscore?,
     boxscoreLoading: Boolean,
     boxscoreError: String?,
-    onOpenBoxscore: (Long) -> Unit,
-    onCloseBoxscore: () -> Unit,
+    gamecast: Gamecast?,
+    gamecastLoading: Boolean,
+    gamecastError: String?,
+    onOpenGame: (Long) -> Unit,
+    onCloseGame: () -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(DetailTab.GAME) }
 
-    // Loading starts as soon as the screen opens rather than when the tab is first
-    // shown, so switching to it is instant. Closing releases the poll loop's hold
-    // on this game.
+    // Loading starts as soon as the screen opens rather than when a tab is first
+    // shown, so switching between them is instant. Closing releases the poll loop's
+    // hold on this game.
     if (game != null) {
         DisposableEffect(game.gamePk) {
-            onOpenBoxscore(game.gamePk)
-            onDispose { onCloseBoxscore() }
+            onOpenGame(game.gamePk)
+            onDispose { onCloseGame() }
         }
     }
 
@@ -138,6 +143,13 @@ fun GameDetailScreen(
                     game.linescore?.let { LinescoreTable(game, it) }
                     GameInfo(game)
                 }
+
+                DetailTab.GAMECAST -> GamecastTab(
+                    game = game,
+                    gamecast = gamecast,
+                    loading = gamecastLoading && gamecast == null,
+                    error = gamecastError,
+                )
 
                 DetailTab.BOX_SCORE -> BoxScoreTab(
                     boxscore = boxscore,

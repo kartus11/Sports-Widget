@@ -53,6 +53,15 @@ class StatsApiClient(cacheDir: File) {
         BoxscoreResponse.serializer(),
     )
 
+    /**
+     * Every play in the game, plus `scoringPlays` as indices into it. Much smaller
+     * than `feed/live`, which bundles rosters and season lines we already have.
+     */
+    suspend fun playByPlay(gamePk: Long): PlayByPlayResponse = get(
+        "$BASE/api/v1/game/$gamePk/playByPlay",
+        PlayByPlayResponse.serializer(),
+    )
+
     /** Inning-by-inning detail for one game. */
     suspend fun linescore(gamePk: Long): LinescoreDto = get(
         "$BASE/api/v1/game/$gamePk/linescore",

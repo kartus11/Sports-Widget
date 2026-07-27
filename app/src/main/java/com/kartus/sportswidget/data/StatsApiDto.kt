@@ -110,6 +110,9 @@ data class LinescoreDto(
     val balls: Int? = null,
     val strikes: Int? = null,
     val outs: Int? = null,
+    /** Only populated by the standalone linescore endpoint, not by schedule hydration. */
+    val offense: LinescoreSideDto? = null,
+    val defense: LinescoreSideDto? = null,
 )
 
 @Serializable
@@ -240,4 +243,59 @@ data class PitchingStatsDto(
     val baseOnBalls: Int? = null,
     val strikeOuts: Int? = null,
     val era: String? = null,
+    val numberOfPitches: Int? = null,
+)
+
+// ---- Live situation (linescore offense/defense) ----
+
+/**
+ * One side of the current situation.
+ *
+ * CAREFUL: `first`/`second`/`third` mean different things on each side. Under
+ * `offense` they are the runners on those bases — which is what the Gamecast
+ * shows. Under `defense` they are the fielders playing those positions. Reading
+ * bases off `defense` would report a runner on every base of every game.
+ */
+@Serializable
+data class LinescoreSideDto(
+    val batter: PersonDto? = null,
+    val onDeck: PersonDto? = null,
+    val inHole: PersonDto? = null,
+    val pitcher: PersonDto? = null,
+    val first: PersonDto? = null,
+    val second: PersonDto? = null,
+    val third: PersonDto? = null,
+)
+
+// ---- Play by play ----
+
+@Serializable
+data class PlayByPlayResponse(
+    val allPlays: List<PlayDto> = emptyList(),
+    /** Indices into [allPlays], not plays themselves. */
+    val scoringPlays: List<Int> = emptyList(),
+)
+
+@Serializable
+data class PlayDto(
+    val result: PlayResultDto? = null,
+    val about: PlayAboutDto? = null,
+)
+
+@Serializable
+data class PlayResultDto(
+    val event: String? = null,
+    val description: String? = null,
+    val rbi: Int? = null,
+    /** Score *after* the play, which is what a scoring-play list wants to show. */
+    val awayScore: Int? = null,
+    val homeScore: Int? = null,
+)
+
+@Serializable
+data class PlayAboutDto(
+    val inning: Int? = null,
+    val isTopInning: Boolean? = null,
+    val halfInning: String? = null,
+    val isScoringPlay: Boolean? = null,
 )
