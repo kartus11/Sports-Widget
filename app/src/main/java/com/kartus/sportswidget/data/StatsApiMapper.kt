@@ -97,14 +97,29 @@ object StatsApiMapper {
         // avoids having to infer participation from an empty stats object.
         return TeamBoxscore(
             team = team,
-            batters = dto.batters.mapNotNull { id ->
-                dto.players["ID$id"]?.let { toBatterLine(id, it) }
-            },
+            batters = dto.batters
+                .mapNotNull { id -> dto.players["ID$id"]?.let { toBatterLine(id, it) } }
+                .filterNot(::isPitcherWhoNeverBatted),
             pitchers = dto.pitchers.mapNotNull { id ->
                 dto.players["ID$id"]?.let { toPitcherLine(id, it) }
             },
         )
     }
+
+    /**
+     * StatsAPI lists every pitcher in `batters`, so a starter who never left the
+     * mound shows up as a 0-for-0 line in the batting table. A two-way player like
+     * Ohtani, or a pitcher who actually took an at-bat, has something to report and
+     * stays — the test is whether anything offensive happened, not the position.
+     */
+    private fun isPitcherWhoNeverBatted(line: BatterLine): Boolean =
+        line.position == "P" &&
+            line.atBats == 0 &&
+            line.hits == 0 &&
+            line.runs == 0 &&
+            line.rbi == 0 &&
+            line.walks == 0 &&
+            line.strikeouts == 0
 
     private fun toBatterLine(playerId: Int, dto: BoxPlayerDto): BatterLine? {
         val name = dto.person?.fullName ?: return null

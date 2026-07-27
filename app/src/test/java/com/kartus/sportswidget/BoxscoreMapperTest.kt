@@ -66,13 +66,22 @@ private const val BOXSCORE_JSON = """
           },
           "seasonStats": { "batting": { "avg": ".247" } }
         },
+        "ID571578": {
+          "person": { "id": 571578, "fullName": "Will Warren" },
+          "position": { "abbreviation": "P" },
+          "stats": {
+            "batting": { "atBats": 0, "runs": 0, "hits": 0, "rbi": 0, "baseOnBalls": 0, "strikeOuts": 0, "homeRuns": 0 },
+            "pitching": { "inningsPitched": "2.2", "hits": 5, "runs": 6, "earnedRuns": 6, "baseOnBalls": 2, "strikeOuts": 5 }
+          },
+          "seasonStats": { "pitching": { "era": "5.06" } }
+        },
         "ID999999": {
           "person": { "id": 999999, "fullName": "Did Not Play" },
           "position": { "abbreviation": "1B" }
         }
       },
-      "batters": [592450, 650402],
-      "pitchers": [543037],
+      "batters": [592450, 650402, 571578],
+      "pitchers": [543037, 571578],
       "bench": [999999]
     },
     "home": {
@@ -139,14 +148,64 @@ class BoxscoreMapperTest {
 
     @Test
     fun `pitching line reads innings as a string and takes era from the season`() {
-        val cole = boxscore.away.pitchers.single()
-        assertEquals("Gerrit Cole", cole.name)
+        val cole = boxscore.away.pitchers.single { it.name == "Gerrit Cole" }
         // "6.1" is six and one third, not six and a tenth — never parse this as a number.
         assertEquals("6.1", cole.inningsPitched)
         assertEquals(4, cole.hits)
         assertEquals(2, cole.earnedRuns)
         assertEquals(9, cole.strikeouts)
         assertEquals("3.21", cole.seasonEra)
+    }
+
+    @Test
+    fun `a pitcher who never came to the plate is kept out of the batting table`() {
+        // Will Warren is in StatsAPI's `batters` array with an all-zero line purely
+        // because he appeared in the game. He is still listed under Pitching.
+        assertTrue(
+            "0-for-0 pitcher should not appear in batting",
+            boxscore.away.batters.none { it.name == "Will Warren" },
+        )
+        assertTrue(
+            "…but he must still be listed as a pitcher",
+            boxscore.away.pitchers.any { it.name == "Will Warren" },
+        )
+    }
+
+    @Test
+    fun `a pitcher who actually batted is kept`() {
+        // The Ohtani case: position P but a real plate appearance, so the line is
+        // meaningful and belongs in the table.
+        val twoWay = """{"teams":{
+            "away":{"team":{"id":1,"name":"A Team"},"batters":[7,8],"pitchers":[7,8],"players":{
+              "ID7":{"person":{"id":7,"fullName":"Two Way"},"position":{"abbreviation":"P"},
+                     "stats":{"batting":{"atBats":3,"hits":2,"runs":1,"rbi":2},"pitching":{"inningsPitched":"7.0"}}},
+              "ID8":{"person":{"id":8,"fullName":"Reliever Only"},"position":{"abbreviation":"P"},
+                     "stats":{"batting":{},"pitching":{"inningsPitched":"1.0"}}}
+            }},
+            "home":{"team":{"id":2,"name":"B Team"},"batters":[],"players":{}}
+        }}"""
+        val parsed = requireNotNull(
+            StatsApiMapper.toBoxscore(json.decodeFromString(BoxscoreResponse.serializer(), twoWay)),
+        )
+        assertEquals(listOf("Two Way"), parsed.away.batters.map { it.name })
+        assertEquals(listOf("Two Way", "Reliever Only"), parsed.away.pitchers.map { it.name })
+    }
+
+    @Test
+    fun `a non-pitcher with an empty line is still shown`() {
+        // A pinch runner or defensive replacement has no at-bats either, but their
+        // absence from the box score would be wrong — the filter is pitchers only.
+        val sub = """{"teams":{
+            "away":{"team":{"id":1,"name":"A Team"},"batters":[9],"players":{
+              "ID9":{"person":{"id":9,"fullName":"Pinch Runner"},"position":{"abbreviation":"PR"},
+                     "battingOrder":"401","stats":{"batting":{"atBats":0}}}
+            }},
+            "home":{"team":{"id":2,"name":"B Team"},"batters":[],"players":{}}
+        }}"""
+        val parsed = requireNotNull(
+            StatsApiMapper.toBoxscore(json.decodeFromString(BoxscoreResponse.serializer(), sub)),
+        )
+        assertEquals(listOf("Pinch Runner"), parsed.away.batters.map { it.name })
     }
 
     @Test

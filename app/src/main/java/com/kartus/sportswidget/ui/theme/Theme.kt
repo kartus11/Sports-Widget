@@ -2,11 +2,9 @@ package com.kartus.sportswidget.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RippleConfiguration
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -26,21 +24,6 @@ private val DarkColors = darkColorScheme(
     secondary = Color(0xFFFF8A9A),
 )
 
-/**
- * The stock ripple is tuned for light surfaces. Against a dark scoreboard card it
- * reads as a bright flash across the whole row, which is far louder than the
- * feedback a tap needs. These alphas keep the press legible as a soft tint.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-private val SubtleRipple = RippleConfiguration(
-    rippleAlpha = RippleAlpha(
-        pressedAlpha = 0.05f,
-        focusedAlpha = 0.05f,
-        draggedAlpha = 0.05f,
-        hoveredAlpha = 0.03f,
-    ),
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SportsWidgetTheme(
@@ -58,8 +41,11 @@ fun SportsWidgetTheme(
     }
 
     MaterialTheme(colorScheme = colorScheme) {
+        // No ripple anywhere. Even at a low alpha it reads as a flash across a dark
+        // card, because the whole row lights up at once. Surfaces that need press
+        // feedback shift their own container colour instead — see GameCard.
         CompositionLocalProvider(
-            LocalRippleConfiguration provides SubtleRipple,
+            LocalRippleConfiguration provides null,
             content = content,
         )
     }

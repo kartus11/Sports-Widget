@@ -55,17 +55,18 @@ class ScoreboardWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val prefs = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
         val scoreboard = WidgetState.decode(prefs[WidgetState.SCOREBOARD_KEY])
+        val error = prefs[WidgetState.ERROR_KEY]
         val logos = scoreboard?.let { WidgetLogoCache.load(context, it) }.orEmpty()
 
         provideContent {
             GlanceTheme {
-                WidgetBody(scoreboard, logos)
+                WidgetBody(scoreboard, logos, error)
             }
         }
     }
 
     @Composable
-    private fun WidgetBody(scoreboard: Scoreboard?, logos: Map<Int, Bitmap>) {
+    private fun WidgetBody(scoreboard: Scoreboard?, logos: Map<Int, Bitmap>, error: String?) {
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
@@ -73,11 +74,15 @@ class ScoreboardWidget : GlanceAppWidget() {
                 .cornerRadius(16.dp)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
         ) {
-            Header(scoreboard)
+            Header(scoreboard, error)
             Spacer(GlanceModifier.height(4.dp))
 
             when {
-                scoreboard == null -> Placeholder("Tap ⟳ to load today's games")
+                // An error with no scoreboard is the only case where the widget has
+                // nothing useful to show; with one, the scores stay and the header
+                // carries the warning.
+                scoreboard == null && error != null -> Placeholder(error)
+                scoreboard == null -> Placeholder("Loading today's games…")
                 scoreboard.games.isEmpty() -> Placeholder("No games scheduled")
                 else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
                     items(scoreboard.games, itemId = { it.gamePk }) { game ->
@@ -89,7 +94,7 @@ class ScoreboardWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun Header(scoreboard: Scoreboard?) {
+    private fun Header(scoreboard: Scoreboard?, error: String?) {
         Row(
             modifier = GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -108,8 +113,19 @@ class ScoreboardWidget : GlanceAppWidget() {
             if (scoreboard != null) {
                 Spacer(GlanceModifier.width(8.dp))
                 Text(
-                    text = TimeFormat.relativeAge(scoreboard.fetchedAtMillis),
-                    style = TextStyle(fontSize = 10.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    text = if (error != null) {
+                        "${TimeFormat.relativeAge(scoreboard.fetchedAtMillis)} · stale"
+                    } else {
+                        TimeFormat.relativeAge(scoreboard.fetchedAtMillis)
+                    },
+                    style = TextStyle(
+                        fontSize = 10.sp,
+                        color = if (error != null) {
+                            GlanceTheme.colors.error
+                        } else {
+                            GlanceTheme.colors.onSurfaceVariant
+                        },
+                    ),
                     modifier = GlanceModifier.defaultWeight(),
                 )
             } else {
@@ -118,8 +134,10 @@ class ScoreboardWidget : GlanceAppWidget() {
 
             Text(
                 text = "⟳",
-                style = TextStyle(fontSize = 15.sp, color = GlanceTheme.colors.primary),
-                modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>()),
+                style = TextStyle(fontSize = 16.sp, color = GlanceTheme.colors.primary),
+                modifier = GlanceModifier
+                    .clickable(actionRunCallback<RefreshWidgetAction>())
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
     }

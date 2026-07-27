@@ -1,5 +1,6 @@
 package com.kartus.sportswidget.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -18,6 +19,19 @@ class ScoreboardWidgetReceiver : GlanceAppWidgetReceiver() {
         WidgetRefreshWorker.schedulePeriodic(context)
         // First placement has no stored scoreboard yet; fill it immediately rather
         // than showing an empty widget until the first periodic run lands.
+        WidgetRefreshWorker.refreshNow(context)
+    }
+
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        // onEnabled only fires for the first instance, so adding a second widget —
+        // or reinstalling over an existing one — would otherwise sit on empty state
+        // until the next periodic run, up to fifteen minutes away.
+        WidgetRefreshWorker.schedulePeriodic(context)
         WidgetRefreshWorker.refreshNow(context)
     }
 

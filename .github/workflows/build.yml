@@ -8,8 +8,53 @@ jobs:
   build:
     name: Build debug APK
     runs-on: ubuntu-latest
+    permissions:
+      # Needed only by the logo bootstrap step below, which commits the fetched
+      # assets back so this never has to run again.
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      # Thirty team marks that change roughly never. Downloading them at runtime
+      # cost a visibly empty widget on first launch, so they ship in the APK
+      # instead. This fetches whatever is missing and commits it; on every later
+      # run the files already exist and the whole step is a no-op.
+      - name: Bootstrap team logo assets
+        run: |
+          set -euo pipefail
+          DIR=app/src/main/assets/team-logos
+          mkdir -p "$DIR"
+
+          # Ask MLB for the current club list rather than hardcoding ids, so an
+          # expansion or relocation is picked up without a code change.
+          IDS=$(curl -fsS "https://statsapi.mlb.com/api/v1/teams?sportId=1" \
+                | python3 -c 'import json,sys; print(" ".join(str(t["id"]) for t in json.load(sys.stdin)["teams"]))')
+
+          ADDED=0
+          for ID in $IDS; do
+            [ -s "$DIR/$ID.png" ] && continue
+            if curl -fsS -o "$DIR/$ID.png" \
+                 "https://midfield.mlbstatic.com/v1/team/$ID/spots/96"; then
+              ADDED=$((ADDED+1))
+            else
+              # Never leave a truncated file behind; the app falls back to the
+              # network for any id it cannot find in assets.
+              rm -f "$DIR/$ID.png"
+              echo "::warning::Could not fetch logo for team $ID"
+            fi
+          done
+          echo "Fetched $ADDED new logo(s); $(ls -1 "$DIR" | wc -l) total"
+
+          if [ -n "$(git status --porcelain "$DIR")" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "$DIR"
+            # [skip ci] so committing assets does not trigger another build.
+            git commit -m "Add bundled MLB team logo assets [skip ci]"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+            git push origin "HEAD:${GITHUB_REF_NAME}" || \
+              echo "::warning::Could not push logo assets; they are still in this build"
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kartus.sportswidget.domain.BatterLine
 import com.kartus.sportswidget.domain.Boxscore
@@ -98,7 +99,7 @@ fun BoxScoreTab(
 private val BATTING_COLUMNS = listOf("AB", "R", "H", "RBI", "BB", "SO", "HR", "AVG")
 private val PITCHING_COLUMNS = listOf("IP", "H", "R", "ER", "BB", "SO", "HR", "ERA")
 
-private val NAME_WIDTH = 132.dp
+private val NAME_WIDTH = 152.dp
 private val STAT_WIDTH = 34.dp
 private val WIDE_STAT_WIDTH = 46.dp
 
@@ -222,6 +223,10 @@ private fun PlayerRow(
                 text = name,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
+                // Without softWrap=false the name breaks at its space and maxLines
+                // silently drops the surname; Ellipsis then marks what was cut.
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
             position?.let {

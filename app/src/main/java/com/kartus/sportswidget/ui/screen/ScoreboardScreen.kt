@@ -1,6 +1,10 @@
 package com.kartus.sportswidget.ui.screen
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +37,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,12 +166,26 @@ private fun DateBar(
 
 @Composable
 private fun GameCard(game: Game, onClick: () -> Unit) {
+    // Ripple is disabled app-wide (see SportsWidgetTheme). Press feedback here is a
+    // short fade between two close container colours, which reads as the card
+    // depressing rather than lighting up.
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val containerColor by animateColorAsState(
+        targetValue = if (pressed) {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        animationSpec = tween(durationMillis = 120),
+        label = "cardPress",
+    )
+
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        interactionSource = interactionSource,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -280,8 +300,9 @@ private fun TeamLine(
  */
 @Composable
 fun TeamLogo(teamId: Int, size: Dp) {
+    val context = LocalContext.current
     AsyncImage(
-        model = TeamLogos.url(teamId, TeamLogos.APP_SIZE),
+        model = TeamLogos.model(context, teamId),
         contentDescription = null,
         modifier = Modifier.size(size),
     )

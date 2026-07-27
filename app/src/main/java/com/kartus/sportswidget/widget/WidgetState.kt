@@ -21,6 +21,7 @@ import kotlinx.serialization.json.Json
 object WidgetState {
 
     val SCOREBOARD_KEY = stringPreferencesKey("scoreboard_json")
+    val ERROR_KEY = stringPreferencesKey("last_error")
 
     val json = Json {
         ignoreUnknownKeys = true
@@ -36,14 +37,38 @@ object WidgetState {
     /** Push [scoreboard] into every placed instance of the widget and redraw them. */
     suspend fun publish(context: Context, scoreboard: Scoreboard) {
         val encoded = json.encodeToString(Scoreboard.serializer(), scoreboard)
-        val manager = GlanceAppWidgetManager(context)
 
-        manager.getGlanceIds(ScoreboardWidget::class.java).forEach { glanceId ->
-            updateAppWidgetState(context, glanceId) { prefs ->
-                prefs[SCOREBOARD_KEY] = encoded
-            }
+        forEachWidget(context) { prefs ->
+            prefs[SCOREBOARD_KEY] = encoded
+            prefs.remove(ERROR_KEY)
         }
+        redraw(context)
+    }
 
+    /**
+     * Record a failed refresh. Any previously published scoreboard is left in place —
+     * stale scores plus a note beat no scores at all.
+     */
+    suspend fun publishError(context: Context, message: String?) {
+        forEachWidget(context) { prefs ->
+            prefs[ERROR_KEY] = message ?: "Couldn't reach MLB"
+        }
+        redraw(context)
+    }
+
+    /** Recompose every placed widget against whatever state it already holds. */
+    suspend fun redraw(context: Context) {
         ScoreboardWidget().updateAll(context)
+    }
+
+    private suspend fun forEachWidget(
+        context: Context,
+        edit: (androidx.datastore.preferences.core.MutablePreferences) -> Unit,
+    ) {
+        GlanceAppWidgetManager(context)
+            .getGlanceIds(ScoreboardWidget::class.java)
+            .forEach { glanceId ->
+                updateAppWidgetState(context, glanceId) { prefs -> edit(prefs) }
+            }
     }
 }

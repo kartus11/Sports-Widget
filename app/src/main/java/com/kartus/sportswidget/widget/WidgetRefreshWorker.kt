@@ -37,22 +37,36 @@ class WidgetRefreshWorker(
 
         return repository.scoreboard(LocalDate.now(), force = true).fold(
             onSuccess = { scoreboard ->
-                // Fetch logos before publishing so the redraw that follows already
-                // has bitmaps on disk to decode.
-                WidgetLogoCache.prefetch(applicationContext, scoreboard)
+                // Scores first. Anything image-related happens after the widget is
+                // already showing numbers — an earlier version fetched logos first
+                // and the widget sat on its placeholder until every one had landed.
                 WidgetState.publish(applicationContext, scoreboard)
+
+                // Cosmetic, and only for teams with no bundled asset. A failure here
+                // must not fail the refresh that already succeeded.
+                runCatching {
+                    WidgetLogoCache.backfill(applicationContext, scoreboard)
+                    WidgetState.redraw(applicationContext)
+                }
+
                 Result.success()
             },
-            onFailure = {
-                // Leave the previously published snapshot in place and let WorkManager
-                // back off — a transient StatsAPI blip should not blank the widget.
-                Result.retry()
+            onFailure = { error ->
+                // Say so on the widget rather than leaving "Tap ⟳ to load" sitting
+                // there looking like the button did nothing.
+                WidgetState.publishError(applicationContext, error.message)
+
+                // Retry a couple of times for a transient blip, then stop: an
+                // endlessly retrying worker is worse than a widget that says it
+                // failed and waits for the next scheduled run.
+                if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
             },
         )
     }
 
     companion object {
         const val MIN_PERIOD_MINUTES = 15L
+        const val MAX_ATTEMPTS = 3
 
         private const val PERIODIC_WORK = "widget-refresh-periodic"
         private const val ONE_SHOT_WORK = "widget-refresh-now"
