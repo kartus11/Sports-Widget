@@ -195,6 +195,55 @@ class ScoreboardWidget : GlanceAppWidget() {
         }
     }
 
+    /** One club: logo, abbreviation, score. Sized for a third of the widget width. */
+    @Composable
+    private fun TeamLine(
+        team: Team,
+        score: Int?,
+        state: GameState,
+        leading: Boolean,
+        logos: Map<Int, Bitmap>,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val logo = logos[team.id]
+            if (logo != null) {
+                Image(
+                    provider = ImageProvider(logo),
+                    contentDescription = null,
+                    modifier = GlanceModifier.size(13.dp),
+                )
+            } else {
+                // Hold the column so rows stay aligned when a logo is missing.
+                Spacer(GlanceModifier.width(13.dp))
+            }
+
+            Spacer(GlanceModifier.width(4.dp))
+
+            Text(
+                text = team.abbreviation,
+                style = TextStyle(
+                    fontSize = 12.sp,
+                    color = GlanceTheme.colors.onSurface,
+                    fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
+                ),
+                maxLines = 1,
+                modifier = GlanceModifier.defaultWeight(),
+            )
+
+            Text(
+                text = if (state == GameState.PREVIEW) "" else score?.toString() ?: "-",
+                style = TextStyle(
+                    fontSize = 12.sp,
+                    color = GlanceTheme.colors.onSurface,
+                    fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.End,
+                ),
+                maxLines = 1,
+                modifier = GlanceModifier.width(17.dp),
+            )
+        }
+    }
+
     @Composable
     private fun Placeholder(message: String) {
         Text(
