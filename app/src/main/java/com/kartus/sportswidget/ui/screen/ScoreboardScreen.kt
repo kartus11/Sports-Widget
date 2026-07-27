@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -172,13 +173,16 @@ private fun GameCard(game: Game, onClick: () -> Unit) {
     // depressing rather than lighting up.
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val resting = MaterialTheme.colorScheme.surfaceVariant
     val containerColor by animateColorAsState(
         targetValue = if (pressed) {
-            MaterialTheme.colorScheme.surfaceContainerHighest
+            // A fixed 6% of the theme's own foreground over the resting colour, so
+            // the shift is the same subtle amount whatever palette the device picks.
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f).compositeOver(resting)
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
+            resting
         },
-        animationSpec = tween(durationMillis = 120),
+        animationSpec = tween(durationMillis = 110),
         label = "cardPress",
     )
 

@@ -84,9 +84,18 @@ class ScoreboardWidget : GlanceAppWidget() {
                 scoreboard == null && error != null -> Placeholder(error)
                 scoreboard == null -> Placeholder("Loading today's games…")
                 scoreboard.games.isEmpty() -> Placeholder("No games scheduled")
-                else -> LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                    items(scoreboard.games, itemId = { it.gamePk }) { game ->
-                        GameRow(game, logos)
+                else -> {
+                    // Three games per row. One game per row left most of the width
+                    // empty between the score and the status, and fit far fewer
+                    // games than the space allowed.
+                    val rows = scoreboard.games.chunked(COLUMNS)
+                    LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+                        items(
+                            count = rows.size,
+                            itemId = { index -> rows[index].first().gamePk },
+                        ) { index ->
+                            GameGridRow(rows[index], logos)
+                        }
                     }
                 }
             }
@@ -142,103 +151,46 @@ class ScoreboardWidget : GlanceAppWidget() {
         }
     }
 
+    /** One row of up to [COLUMNS] games, padded so partial rows stay aligned. */
     @Composable
-    private fun GameRow(game: Game, logos: Map<Int, Bitmap>) {
-        Row(
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .clickable(actionStartActivity<MainActivity>()),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Teams and scores share one weighted column so the scores land in a
-            // single right-aligned stack instead of floating mid-row.
-            Column(modifier = GlanceModifier.defaultWeight()) {
-                TeamLine(game.away, game.awayScore, game.state, leading(game, home = false), logos)
-                Spacer(GlanceModifier.height(3.dp))
-                TeamLine(game.home, game.homeScore, game.state, leading(game, home = true), logos)
+    private fun GameGridRow(games: List<Game>, logos: Map<Int, Bitmap>) {
+        Row(modifier = GlanceModifier.fillMaxWidth().padding(vertical = 3.dp)) {
+            games.forEachIndexed { index, game ->
+                if (index > 0) Spacer(GlanceModifier.width(8.dp))
+                GameCell(game, logos, GlanceModifier.defaultWeight())
             }
 
-            Spacer(GlanceModifier.width(8.dp))
-            StatusBlock(game)
+            // A final row of one or two games must not stretch its cells to fill
+            // the width, or the columns stop lining up with the rows above.
+            repeat(COLUMNS - games.size) {
+                Spacer(GlanceModifier.width(8.dp))
+                Spacer(GlanceModifier.defaultWeight())
+            }
         }
     }
 
     @Composable
-    private fun TeamLine(
-        team: Team,
-        score: Int?,
-        state: GameState,
-        leading: Boolean,
-        logos: Map<Int, Bitmap>,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val logo = logos[team.id]
-            if (logo != null) {
-                Image(
-                    provider = ImageProvider(logo),
-                    contentDescription = null,
-                    modifier = GlanceModifier.size(16.dp),
-                )
-            } else {
-                // Hold the column so rows stay aligned when a logo is missing.
-                Spacer(GlanceModifier.width(16.dp))
-            }
+    private fun GameCell(game: Game, logos: Map<Int, Bitmap>, modifier: GlanceModifier) {
+        Column(modifier = modifier.clickable(actionStartActivity<MainActivity>())) {
+            TeamLine(game.away, game.awayScore, game.state, leading(game, home = false), logos)
+            Spacer(GlanceModifier.height(2.dp))
+            TeamLine(game.home, game.homeScore, game.state, leading(game, home = true), logos)
 
-            Spacer(GlanceModifier.width(6.dp))
-
-            Text(
-                text = team.abbreviation,
-                style = TextStyle(
-                    fontSize = 13.sp,
-                    color = GlanceTheme.colors.onSurface,
-                    fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
-                ),
-                modifier = GlanceModifier.defaultWeight(),
-            )
-
-            Text(
-                text = if (state == GameState.PREVIEW) "" else score?.toString() ?: "-",
-                style = TextStyle(
-                    fontSize = 13.sp,
-                    color = GlanceTheme.colors.onSurface,
-                    fontWeight = if (leading) FontWeight.Bold else FontWeight.Normal,
-                    textAlign = TextAlign.End,
-                ),
-                modifier = GlanceModifier.width(22.dp),
-            )
-        }
-    }
-
-    @Composable
-    private fun StatusBlock(game: Game) {
-        Column(
-            horizontalAlignment = Alignment.End,
-            modifier = GlanceModifier.width(58.dp),
-        ) {
-            if (game.state.isLive) {
-                Text(
-                    text = "LIVE",
-                    style = TextStyle(
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = GlanceTheme.colors.error,
-                        textAlign = TextAlign.End,
-                    ),
-                )
-            }
+            // Status sits under the matchup rather than beside it — at a third of
+            // the width there is no room for a column of its own.
             Text(
                 text = game.compactStatus { TimeFormat.clock(it) },
                 style = TextStyle(
-                    fontSize = 11.sp,
+                    fontSize = 9.sp,
                     color = if (game.state.isLive) {
-                        GlanceTheme.colors.onSurface
+                        GlanceTheme.colors.error
                     } else {
                         GlanceTheme.colors.onSurfaceVariant
                     },
                     fontWeight = if (game.state.isLive) FontWeight.Bold else FontWeight.Normal,
-                    textAlign = TextAlign.End,
                 ),
+                maxLines = 1,
+                modifier = GlanceModifier.padding(top = 1.dp),
             )
         }
     }
@@ -250,6 +202,11 @@ class ScoreboardWidget : GlanceAppWidget() {
             style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.onSurfaceVariant),
             modifier = GlanceModifier.padding(top = 8.dp),
         )
+    }
+
+    private companion object {
+        /** Games per row. Three fits comfortably at a phone's widget width. */
+        const val COLUMNS = 3
     }
 
     private fun leading(game: Game, home: Boolean): Boolean {

@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.SportsWidget" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      The window background sits behind Compose and shows through during activity
+      launch and navigation transitions. A light parent here meant a white pane
+      flashing behind a dark UI on every tap into a screen — which reads as the app
+      flashing, and no amount of ripple tuning fixes it. values-night/ overrides
+      both the parent and the colour.
+    -->
+    <style name="Theme.SportsWidget" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
 </resources>
